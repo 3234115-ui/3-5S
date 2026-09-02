@@ -1,0 +1,880 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+<title>ECRS 3D 공정 개선 실습 - 밸브 조립 라인을 직접 개선해보세요</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: radial-gradient(circle at 50% 0%, #1b1f27 0%, #0a0c10 70%);
+    color: #e9ecef; font-family: "Malgun Gothic", "맑은 고딕", sans-serif;
+    display: flex; justify-content: center; padding: 16px 0 50px;
+  }
+  #app { width: 100%; max-width: 980px; padding: 0 12px; }
+  h1 { text-align:center; font-size:20px; margin:6px 0 14px; }
+  .panel { background:#14171d; border-radius:12px; padding:14px 16px; margin-bottom:12px; box-shadow:0 6px 24px rgba(0,0,0,0.4); }
+
+  #stage-banner-panel {
+    display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;
+    background:#1c2430; border:1px solid #2d3d52;
+  }
+  #stage-banner { font-size:13.5px; line-height:1.5; }
+  #stage-toggle-btn {
+    font-size:13px; font-weight:700; color:#0d1117; background:#ffd43b; border:none;
+    border-radius:8px; padding:9px 16px; cursor:pointer; white-space:nowrap;
+  }
+  #stage-toggle-btn:hover { filter:brightness(1.08); }
+
+  #legend { display:flex; gap:8px; margin-bottom:0; flex-wrap:wrap; }
+  .legend-chip { font-size:12px; padding:5px 9px; border-radius:14px; background:#1c2028; border:1px solid #2a2f38; }
+  .legend-chip b { margin-right:3px; }
+  #symbol-legend { display:flex; gap:14px; margin-top:9px; flex-wrap:wrap; }
+  .sym-chip { display:flex; align-items:center; gap:7px; font-size:12px; color:#ced4da; }
+  .sym-icon { width:18px; height:18px; display:inline-block; flex-shrink:0; }
+  .sym-square { background:#5BC0DE; }
+  .sym-circle { background:#F0AD4E; border-radius:50%; }
+  .sym-arrow { width:0; height:0; border-top:8px solid transparent; border-bottom:8px solid transparent; border-left:16px solid #868e96; background:none; }
+
+  #zone-stats-label { font-size:12px; color:#868e96; margin-bottom:8px; }
+  #zone-stats { display:flex; gap:8px; flex-wrap:wrap; }
+  .zone-chip { font-size:12.5px; padding:5px 11px; border-radius:10px; background:#1c2028; border:2px solid #333a45; font-weight:700; white-space:nowrap; }
+  .zone-chip b { margin-right:5px; color:#e9ecef; }
+
+  #mission-bar { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; }
+  #mission-bar .time-now { font-size:26px; font-weight:800; }
+  #mission-bar .time-target { font-size:12.5px; color:#adb5bd; margin-top:4px; }
+  #mission-progress-track { background:#262b33; border-radius:8px; height:11px; overflow:hidden; margin-top:8px; }
+  #mission-progress-fill { height:100%; background:#495057; transition: width 0.4s, background 0.4s; }
+  #mission-status { font-weight:700; font-size:13.5px; }
+
+  #canvas-container {
+    width: 100%; aspect-ratio: 940 / 500; border-radius: 12px; overflow: hidden;
+    position: relative; box-shadow: 0 8px 26px rgba(0,0,0,0.5); background:#11141a;
+    touch-action: none;
+  }
+  #canvas-container canvas { display:block; width:100% !important; height:100% !important; }
+  #hint-toast {
+    position:absolute; top:10px; left:50%; transform:translateX(-50%);
+    background: rgba(20,20,20,0.88); padding:7px 16px; border-radius:20px;
+    font-weight:700; font-size:13px; opacity:0; transition:opacity 0.25s; pointer-events:none; z-index:5;
+    max-width: 90%; text-align:center;
+  }
+  #sim-timer {
+    position:absolute; top:10px; right:12px; background: rgba(20,20,20,0.75); padding:5px 12px;
+    border-radius:14px; font-size:12.5px; font-weight:700; color:#ffd43b; display:none; z-index:5;
+  }
+  #orbit-hint {
+    position:absolute; bottom:8px; left:50%; transform:translateX(-50%);
+    background: rgba(20,20,20,0.6); padding:5px 12px; border-radius:12px;
+    font-size:11px; color:#adb5bd; z-index:5; white-space:nowrap;
+  }
+  #fit-view-btn {
+    position:absolute; top:10px; left:12px; background: rgba(20,20,20,0.75); color:#e9ecef;
+    border:none; padding:6px 12px; border-radius:12px; font-size:12px; font-weight:700;
+    cursor:pointer; z-index:5;
+  }
+  #fit-view-btn:hover { background: rgba(20,20,20,0.92); }
+
+  .modal-overlay {
+    position:absolute; inset:0; display:none; align-items:center; justify-content:center;
+    background: rgba(10,12,16,0.6); z-index:10; padding: 16px;
+  }
+  .modal-card {
+    width: 100%; max-width: 460px; background:#f8f9fa; color:#212529; border-radius:12px; padding:20px 22px;
+    box-shadow:0 10px 40px rgba(0,0,0,0.5);
+  }
+  .modal-card h3 { margin-top:0; font-size:17px; }
+  #simplify-input {
+    width:100%; padding:10px 12px; border-radius:8px; border:1px solid #ced4da; font-size:14px;
+    font-family:inherit; resize:vertical; margin-top:6px;
+  }
+  .modal-actions { display:flex; justify-content:flex-end; gap:8px; margin-top:14px; }
+  .modal-actions button { font-size:14px; font-weight:700; border:none; border-radius:8px; padding:9px 16px; cursor:pointer; }
+  .modal-actions .cancel-btn { background:#e9ecef; color:#495057; }
+  .modal-actions .apply-btn { background:#5CB85C; color:white; }
+
+  #toolbar { display:flex; gap:8px; margin-top:12px; flex-wrap:wrap; }
+  .action-btn {
+    flex: 1 1 130px; font-size:13.5px; font-weight:700; color:white; border:none; border-radius:8px;
+    padding:11px 6px; cursor:pointer; transition:filter 0.15s;
+  }
+  .action-btn:hover { filter:brightness(1.12); }
+  #btn-eliminate { background:#D9534F; }
+  #btn-combine { background:#0275D8; }
+  #btn-simplify { background:#5CB85C; }
+  #btn-simulate { background:#ffd43b; color:#212529; }
+  #reset-btn { background:#495057; }
+
+  #reorder-strip { display:flex; gap:6px; overflow-x:auto; padding:10px 4px; -webkit-overflow-scrolling: touch; }
+  .chip {
+    flex-shrink:0; min-width:84px; padding:8px 9px 8px 4px; border-radius:8px; border:2px solid #2a2f38;
+    background:#1c2028; font-size:11px; text-align:center; display:flex; align-items:center; gap:4px; user-select:none;
+  }
+  .chip-handle { touch-action:none; cursor:grab; color:#6c7581; font-size:15px; padding:4px 2px; flex-shrink:0; }
+  .chip-body { flex:1; }
+  .chip .chip-time { font-weight:800; color:#ffd43b; margin-top:2px; }
+  .chip.drag-over { border-color:#4dabf7; }
+  .chip.dragging { opacity:0.6; box-shadow:0 6px 16px rgba(0,0,0,0.5); position:relative; z-index:20; }
+
+  @media (max-width: 600px) {
+    h1 { font-size:16px; }
+    .panel { padding:12px; }
+    #legend, #symbol-legend { gap:6px; }
+    .legend-chip, .sym-chip { font-size:11px; }
+    #mission-bar .time-now { font-size:22px; }
+    #stage-banner { font-size:12.5px; }
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <h1>🏭 ECRS 3D 공정 개선 실습 — 밸브 조립 라인을 직접 개선해보세요</h1>
+
+  <div class="panel" id="stage-banner-panel">
+    <div id="stage-banner"></div>
+    <button id="stage-toggle-btn"></button>
+  </div>
+
+  <div class="panel">
+    <div id="legend">
+      <span class="legend-chip"><b style="color:#D9534F;">E</b>제거 — 스테이션을 클릭 선택 후 제거 (필수 이동은 제거 불가)</span>
+      <span class="legend-chip"><b style="color:#4dabf7;">C</b>결합 — 인접한 같은 종류 2개 선택 후 결합</span>
+      <span class="legend-chip"><b style="color:#ced4da;">R</b>재배치 — 아래 순서띠의 ⠿ 손잡이를 드래그</span>
+      <span class="legend-chip"><b style="color:#5CB85C;">S</b>단순화 — 스테이션 1개 선택 후 아이디어 입력</span>
+    </div>
+    <div id="symbol-legend">
+      <span class="sym-chip"><span class="sym-icon sym-square"></span>검사(Inspection)</span>
+      <span class="sym-chip"><span class="sym-icon sym-circle"></span>작업(Operation) — 가공/조립/포장</span>
+      <span class="sym-chip"><span class="sym-arrow"></span>이동(Transport)</span>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div id="zone-stats-label"></div>
+    <div id="zone-stats"></div>
+  </div>
+
+  <div class="panel">
+    <div id="mission-bar">
+      <div>
+        <div class="time-now" id="time-now">❓ ---</div>
+        <div class="time-target" id="best-label">아직 기록 없음</div>
+      </div>
+      <div id="mission-status">🎯 시뮬레이션을 재생해서 이번 조의 기록을 확인해보세요</div>
+    </div>
+    <div id="mission-progress-track"><div id="mission-progress-fill" style="width:0%;"></div></div>
+  </div>
+
+  <div class="panel">
+    <div id="canvas-container">
+      <div id="hint-toast"></div>
+      <div id="sim-timer">진행: 0초</div>
+      <button id="fit-view-btn" onclick="resetView()">⤢ 전체 보기</button>
+      <div id="orbit-hint">드래그: 화면 이동 · 휠/핀치: 확대·축소 · 오른쪽 드래그: 회전</div>
+      <div class="modal-overlay" id="simplify-modal">
+        <div class="modal-card">
+          <h3>✂ 이 공정을 어떻게 더 간단하게 만들까요?</h3>
+          <div id="modal-station-name" style="color:#495057;margin-bottom:4px;"></div>
+          <textarea id="simplify-input" rows="3" placeholder="예: 전동공구를 도입해서 체결 시간을 줄인다"></textarea>
+          <div class="modal-actions">
+            <button class="cancel-btn" onclick="cancelSimplify()">취소</button>
+            <button class="apply-btn" onclick="submitSimplify()">적용하기</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div id="toolbar">
+      <button class="action-btn" id="btn-eliminate" onclick="doEliminate()">🗑 제거(E)</button>
+      <button class="action-btn" id="btn-combine" onclick="doCombine()">🔗 결합(C)</button>
+      <button class="action-btn" id="btn-simplify" onclick="doSimplify()">✂ 단순화(S)</button>
+      <button class="action-btn" id="btn-simulate" onclick="runSimulation()">▶ 라인 시뮬레이션 재생</button>
+      <button class="action-btn" id="reset-btn" onclick="resetAll()">↺ 처음부터</button>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div style="font-size:12px;color:#868e96;margin-bottom:6px;">라인 배치 순서 (⠿ 손잡이를 드래그해서 재배치 · R)</div>
+    <div id="reorder-strip"></div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://unpkg.com/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script>
+/* ===================== THREE.js 기본 세팅 ===================== */
+const container = document.getElementById('canvas-container');
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x11141a);
+
+const camera = new THREE.PerspectiveCamera(42, container.clientWidth / container.clientHeight, 1, 3000);
+camera.position.set(0, 480, 260);
+camera.lookAt(0, 10, 0);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(container.clientWidth, container.clientHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.15;
+renderer.outputEncoding = THREE.sRGBEncoding;
+container.insertBefore(renderer.domElement, container.firstChild);
+
+const controls = new THREE.OrbitControls(camera, renderer.domElement);
+controls.target.set(0, 10, 0);
+controls.enableDamping = true;
+controls.dampingFactor = 0.08;
+controls.minDistance = 100;
+controls.maxDistance = 1700;
+controls.maxPolarAngle = Math.PI / 2 - 0.02;
+controls.minPolarAngle = 0.05;
+controls.mouseButtons = { LEFT: THREE.MOUSE.PAN, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.ROTATE };
+controls.touches = { ONE: THREE.TOUCH.PAN, TWO: THREE.TOUCH.DOLLY_PAN };
+controls.panSpeed = 1.2;
+controls.update();
+
+function resetView() {
+  camera.position.set(0, 480, 260);
+  controls.target.set(0, 10, 0);
+  controls.update();
+}
+
+window.addEventListener('resize', () => {
+  const w = container.clientWidth, h = container.clientHeight;
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+  renderer.setSize(w, h);
+});
+
+scene.add(new THREE.AmbientLight(0x8fa2b8, 0.55));
+const keyLight = new THREE.DirectionalLight(0xfff2e0, 1.15);
+keyLight.position.set(160, 320, 200);
+keyLight.castShadow = true;
+keyLight.shadow.mapSize.set(1536, 1536);
+keyLight.shadow.camera.left = -420; keyLight.shadow.camera.right = 420;
+keyLight.shadow.camera.top = 260; keyLight.shadow.camera.bottom = -260;
+scene.add(keyLight);
+const rimLight = new THREE.DirectionalLight(0x4dabf7, 0.3);
+rimLight.position.set(-220, 150, -200);
+scene.add(rimLight);
+
+const groundMat = new THREE.MeshStandardMaterial({ color: 0x1c2028, metalness: 0.3, roughness: 0.85 });
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(900, 340), groundMat);
+ground.rotation.x = -Math.PI / 2;
+ground.receiveShadow = true;
+scene.add(ground);
+
+const raycaster = new THREE.Raycaster();
+const mouse = new THREE.Vector2();
+let simRunning = false;
+let timeRevealed = false;
+let revealAnim = null;
+function animate() {
+  requestAnimationFrame(animate);
+  controls.update();
+  if (simRunning) stepSimulation();
+  if (revealAnim && revealAnim.active && tokenGroup) {
+    const t = Math.min(1, (performance.now() - revealAnim.start) / revealAnim.duration);
+    const s = 1 + 0.9 * (1 - Math.pow(1 - t, 3));
+    tokenGroup.scale.set(s, s, s);
+    if (t >= 1) revealAnim.active = false;
+  }
+  renderer.render(scene, camera);
+}
+animate();
+
+/* ===================== 헬퍼 ===================== */
+function shadeMesh(m) { m.castShadow = true; m.receiveShadow = true; return m; }
+
+function roundRectPath(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+
+function addLabel(text, color, w, h) {
+  const c = document.createElement('canvas'); c.width = 380; c.height = 120;
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = 'rgba(8,10,14,0.85)';
+  roundRectPath(ctx, 5, 5, 370, 110, 16);
+  ctx.fill();
+  const lines = text.split('\n');
+  ctx.font = 'bold 40px sans-serif'; ctx.fillStyle = color; ctx.textAlign = 'center';
+  lines.forEach((line, i) => ctx.fillText(line, 190, 50 + i * 46));
+  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), transparent: true, depthTest: false }));
+  sprite.scale.set(w, h, 1);
+  return sprite;
+}
+
+/* 공정분석표 표준 기호: 검사=사각형, 작업(가공/조립/포장)=원, 이동=화살표 */
+function buildSymbolMesh(zone, color) {
+  const g = new THREE.Group();
+  const mat = new THREE.MeshStandardMaterial({ color, metalness: 0.25, roughness: 0.55 });
+  if (zone === '검사') {
+    const plate = shadeMesh(new THREE.Mesh(new THREE.BoxGeometry(20, 5, 20), mat));
+    g.add(plate);
+  } else if (zone === '이동') {
+    const shape = new THREE.Shape();
+    shape.moveTo(-10.4, -4.2);
+    shape.lineTo(3.3, -4.2);
+    shape.lineTo(3.3, -9.1);
+    shape.lineTo(14.3, 0);
+    shape.lineTo(3.3, 9.1);
+    shape.lineTo(3.3, 4.2);
+    shape.lineTo(-10.4, 4.2);
+    shape.lineTo(-10.4, -4.2);
+    const geo = new THREE.ExtrudeGeometry(shape, { depth: 4.5, bevelEnabled: false });
+    const arrow = shadeMesh(new THREE.Mesh(geo, mat));
+    arrow.rotation.x = -Math.PI / 2;
+    g.add(arrow);
+  } else {
+    const disc = shadeMesh(new THREE.Mesh(new THREE.CylinderGeometry(12, 12, 5, 36), mat));
+    g.add(disc);
+  }
+  return g;
+}
+
+const ZONE_COLOR = { 검사: 0x5BC0DE, 이동: 0x868e96, 가공: 0xF0AD4E, 조립: 0x5CB85C, 포장: 0x9B59B6 };
+const ZONE_HEX = { 검사: '#5BC0DE', 이동: '#868e96', 가공: '#F0AD4E', 조립: '#5CB85C', 포장: '#9B59B6' };
+const TRANSIT_COST = 30;
+
+let currentMode = 'practice';
+let cards = [];
+let nextId = 1001;
+let selected = new Set();
+let stationGroup = null;
+let connectorGroup = null;
+let tokenGroup = null;
+let tokenParts = {};
+let clickableStations = [];
+let pendingSimplifyCardId = null;
+let sessionBestTime = null;
+
+function practiceCards() {
+  return [
+    { id: 1, name: '부품 검수(연습)', zone: '검사', time: 20, removable: false, simplifiable: true, simplifiedTime: 10, simplified: false, combineGroup: null, component: null },
+    { id: 2, name: '예비 이동(연습)', zone: '이동', time: 15, removable: true, simplifiable: false, combineGroup: null, component: null },
+    { id: 3, name: '조립 작업(연습)', zone: '조립', time: 25, removable: false, simplifiable: false, combineGroup: null, component: null },
+    { id: 4, name: '1차 검사(연습)', zone: '검사', time: 15, removable: false, simplifiable: false, combineGroup: 'demo', component: null },
+    { id: 5, name: '2차 검사(연습)', zone: '검사', time: 15, removable: false, simplifiable: false, combineGroup: 'demo', component: null },
+    { id: 6, name: '포장(연습)', zone: '포장', time: 15, removable: false, simplifiable: false, combineGroup: null, component: null },
+  ];
+}
+
+function mainCards() {
+  return [
+    { id: 1, name: '원자재 입고검수', zone: '검사', time: 30, removable: false, simplifiable: true, simplifiedTime: 20, simplified: false, combineGroup: null, component: null },
+    { id: 2, name: '창고→가공장 운반', zone: '이동', time: 30, removable: false, simplifiable: false, combineGroup: null, component: null },
+    { id: 3, name: '바디 황삭가공', zone: '가공', time: 80, removable: false, simplifiable: true, simplifiedTime: 65, simplified: false, combineGroup: null, component: 'body_rough' },
+    { id: 4, name: '1차 치수검사', zone: '검사', time: 25, removable: false, simplifiable: false, combineGroup: 'dim_inspect', component: null },
+    { id: 5, name: '바디 정삭가공', zone: '가공', time: 60, removable: false, simplifiable: true, simplifiedTime: 45, simplified: false, combineGroup: null, component: 'body_finish' },
+    { id: 6, name: '2차 치수검사', zone: '검사', time: 25, removable: false, simplifiable: false, combineGroup: 'dim_inspect', component: null },
+    { id: 7, name: '가공장→조립장 운반', zone: '이동', time: 30, removable: false, simplifiable: false, combineGroup: null, component: null },
+    { id: 8, name: '시트 압입조립', zone: '조립', time: 40, removable: false, simplifiable: false, combineGroup: null, component: 'seat' },
+    { id: 9, name: '임시 보관대 이동', zone: '이동', time: 20, removable: true, simplifiable: false, combineGroup: null, component: null },
+    { id: 10, name: '보관대→조립대 재이동', zone: '이동', time: 20, removable: true, simplifiable: false, combineGroup: null, component: null },
+    { id: 11, name: '디스크 조립', zone: '조립', time: 45, removable: false, simplifiable: false, combineGroup: null, component: 'disc' },
+    { id: 12, name: '스템 조립', zone: '조립', time: 35, removable: false, simplifiable: false, combineGroup: null, component: 'stem' },
+    { id: 13, name: '육안 외관검사', zone: '검사', time: 20, removable: false, simplifiable: false, combineGroup: 'visual_inspect', component: null },
+    { id: 14, name: '개폐 동작검사', zone: '검사', time: 30, removable: false, simplifiable: false, combineGroup: null, component: null },
+    { id: 15, name: '최종 육안검사', zone: '검사', time: 20, removable: false, simplifiable: false, combineGroup: 'visual_inspect', component: null },
+    { id: 16, name: '조립장→포장장 운반', zone: '이동', time: 30, removable: false, simplifiable: false, combineGroup: null, component: null },
+    { id: 17, name: '실링/패킹 조립', zone: '조립', time: 30, removable: false, simplifiable: true, simplifiedTime: 20, simplified: false, combineGroup: null, component: 'packing' },
+    { id: 18, name: '라벨 부착', zone: '포장', time: 15, removable: false, simplifiable: false, combineGroup: null, component: null },
+    { id: 19, name: '박스 포장', zone: '포장', time: 35, removable: false, simplifiable: false, combineGroup: null, component: 'crate' },
+    { id: 20, name: '포장장→출하장 이동', zone: '이동', time: 25, removable: false, simplifiable: false, combineGroup: null, component: null },
+  ];
+}
+
+function loadMode(mode) {
+  currentMode = mode;
+  cards = mode === 'practice' ? practiceCards() : mainCards();
+  nextId = 1001;
+  selected.clear();
+  sessionBestTime = null;
+  timeRevealed = false;
+  updateStageBanner();
+  layoutStations();
+}
+
+function updateStageBanner() {
+  const banner = document.getElementById('stage-banner');
+  const btn = document.getElementById('stage-toggle-btn');
+  if (currentMode === 'practice') {
+    banner.innerHTML = '🎓 <b>1단계 · 연습 모드</b> — 작은 라인으로 제거(E)·결합(C)·재배치(R)·단순화(S)를 먼저 편하게 눌러보세요. 방법이 익숙해지면 다음 단계로 넘어가세요.';
+    btn.textContent = '2단계: 실습 시작하기 →';
+    btn.onclick = () => loadMode('main');
+  } else {
+    banner.innerHTML = '🏆 <b>2단계 · 실습 모드</b> — 밸브 조립 20개 공정입니다. 조별 최고 기록에 도전해보세요.';
+    btn.textContent = '↺ 1단계 연습으로 돌아가기';
+    btn.onclick = () => loadMode('practice');
+  }
+}
+
+function slotZ(i, n) {
+  const span = Math.max(240, Math.min(700, n * 34));
+  if (n <= 1) return 0;
+  return -span / 2 + (span / (n - 1)) * i;
+}
+function computeTotal() {
+  let total = cards.reduce((s, c) => s + c.time, 0);
+  for (let i = 0; i < cards.length - 1; i++) if (cards[i].zone !== cards[i + 1].zone) total += TRANSIT_COST;
+  return total;
+}
+
+/* ===================== 구역별 통계 ===================== */
+function renderZoneStats() {
+  document.getElementById('zone-stats-label').textContent = `현재 라인 구성 (총 ${cards.length}개 스테이션)`;
+  const counts = {};
+  cards.forEach(c => { counts[c.zone] = (counts[c.zone] || 0) + 1; });
+  const order = ['검사', '이동', '가공', '조립', '포장'];
+  const el = document.getElementById('zone-stats');
+  el.innerHTML = order.map(z =>
+    `<span class="zone-chip" style="border-color:${ZONE_HEX[z]};"><b>${z}</b>${counts[z] || 0}개</span>`
+  ).join('') + `<span class="zone-chip" style="border-color:#ffd43b;"><b>총 스테이션</b>${cards.length}개</span>`;
+}
+
+/* ===================== 3D 라인 렌더링 ===================== */
+function clearLine3D() {
+  if (stationGroup) scene.remove(stationGroup);
+  if (connectorGroup) scene.remove(connectorGroup);
+  stationGroup = new THREE.Group();
+  connectorGroup = new THREE.Group();
+  scene.add(stationGroup); scene.add(connectorGroup);
+  clickableStations = [];
+}
+
+function buildStationMesh(card, x) {
+  const g = new THREE.Group();
+  const color = ZONE_COLOR[card.zone] || 0x999999;
+  const symbol = buildSymbolMesh(card.zone, color);
+  symbol.position.y = 2;
+  g.add(symbol);
+  const label = addLabel(`${card.name}\n${card.time}초`, '#ffffff', 40, 12.5);
+  label.position.set(0, 48, 0);
+  g.add(label);
+  g.position.set(x, 0, 0);
+  const symbolMeshes = [];
+  symbol.traverse(o => { if (o.isMesh) symbolMeshes.push(o); });
+  g.userData = { cardId: card.id, symbolMeshes };
+  return g;
+}
+
+function layoutStations() {
+  timeRevealed = false;
+  clearLine3D();
+  const n = cards.length;
+  cards.forEach((card, i) => {
+    const x = slotZ(i, n);
+    const mesh = buildStationMesh(card, x);
+    stationGroup.add(mesh);
+    clickableStations.push(mesh);
+    if (selected.has(card.id)) {
+      setStationHighlight(mesh, true);
+      mesh.position.y = 6;
+      const ring = shadeMesh(new THREE.Mesh(
+        new THREE.RingGeometry(15, 19, 40),
+        new THREE.MeshStandardMaterial({ color: 0xffd43b, emissive: 0xffd43b, emissiveIntensity: 0.9, side: THREE.DoubleSide, transparent: true, opacity: 0.9 })
+      ));
+      ring.rotation.x = -Math.PI / 2;
+      ring.position.set(x, 0.6, 0);
+      connectorGroup.add(ring);
+    }
+
+    if (i < n - 1) {
+      const nextX = slotZ(i + 1, n);
+      const differs = card.zone !== cards[i + 1].zone;
+      const midX = (x + nextX) / 2;
+      const len = Math.abs(nextX - x) - 16;
+      const bar = shadeMesh(new THREE.Mesh(
+        new THREE.BoxGeometry(Math.max(len, 3), 1.2, 5),
+        new THREE.MeshStandardMaterial({ color: differs ? 0xff4d4d : 0x3a3f48, emissive: differs ? 0x662222 : 0x000000, metalness: 0.3, roughness: 0.6 })
+      ));
+      bar.position.set(midX, 0.8, 0);
+      connectorGroup.add(bar);
+      if (differs) {
+        const tag = addLabel(`+${TRANSIT_COST}초`, '#ff8787', 13, 4.5);
+        tag.position.set(midX, 15, 0);
+        connectorGroup.add(tag);
+      }
+    }
+  });
+  renderReorderStrip();
+  renderZoneStats();
+  updateMission();
+}
+
+function setStationHighlight(mesh, on) {
+  mesh.userData.symbolMeshes.forEach(m => {
+    m.material.emissive = new THREE.Color(on ? 0xffd43b : 0x000000);
+    m.material.emissiveIntensity = on ? 1.0 : 0;
+  });
+}
+
+function pickAtClient(clientX, clientY) {
+  const rect = renderer.domElement.getBoundingClientRect();
+  mouse.x = ((clientX - rect.left) / rect.width) * 2 - 1;
+  mouse.y = -((clientY - rect.top) / rect.height) * 2 + 1;
+  raycaster.setFromCamera(mouse, camera);
+  const hits = raycaster.intersectObjects(clickableStations, true);
+  if (hits.length === 0) return;
+  let obj = hits[0].object;
+  while (obj && !obj.userData.cardId) obj = obj.parent;
+  if (!obj) return;
+  toggleSelect(obj.userData.cardId);
+}
+
+let pointerDownPos = null;
+renderer.domElement.addEventListener('pointerdown', (ev) => { pointerDownPos = { x: ev.clientX, y: ev.clientY }; });
+renderer.domElement.addEventListener('pointerup', (ev) => {
+  if (simRunning || !pointerDownPos) return;
+  const dx = ev.clientX - pointerDownPos.x, dy = ev.clientY - pointerDownPos.y;
+  if (Math.sqrt(dx * dx + dy * dy) < 6) pickAtClient(ev.clientX, ev.clientY);
+  pointerDownPos = null;
+});
+
+function toggleSelect(id) {
+  if (selected.has(id)) selected.delete(id); else selected.add(id);
+  layoutStations();
+}
+
+/* ===================== 안내 토스트 ===================== */
+const hintEl = document.getElementById('hint-toast');
+function hint(text, color) {
+  hintEl.textContent = text; hintEl.style.color = color || '#ffd43b'; hintEl.style.opacity = '1';
+  clearTimeout(hint._t); hint._t = setTimeout(() => { hintEl.style.opacity = '0'; }, 1800);
+}
+
+/* ===================== ECRS 액션 ===================== */
+function doEliminate() {
+  if (selected.size === 0) { hint('제거할 스테이션을 먼저 클릭하세요.', '#ffd43b'); return; }
+  let removedAny = false, blocked = false;
+  cards = cards.filter(c => {
+    if (selected.has(c.id)) {
+      if (c.removable) { removedAny = true; return false; }
+      blocked = true; return true;
+    }
+    return true;
+  });
+  if (blocked) hint('⚠ 이 이동/공정은 작업장 간 필수 이동이라 제거할 수 없어요.', '#ff8787');
+  else if (removedAny) hint('✅ 불필요한 공정을 제거했습니다.', '#69db7c');
+  selected.clear();
+  layoutStations();
+}
+
+function doCombine() {
+  if (selected.size !== 2) { hint('통합할 스테이션 2개를 클릭하세요.', '#ffd43b'); return; }
+  const ids = Array.from(selected);
+  const i1 = cards.findIndex(c => c.id === ids[0]);
+  const i2 = cards.findIndex(c => c.id === ids[1]);
+  const lo = Math.min(i1, i2), hi = Math.max(i1, i2);
+  if (hi - lo !== 1) { hint('⚠ 인접한 스테이션끼리만 통합할 수 있어요. 먼저 재배치해보세요.', '#ff8787'); return; }
+  const a = cards[lo], b = cards[hi];
+  if (!a.combineGroup || a.combineGroup !== b.combineGroup) { hint('⚠ 같은 종류의 공정만 통합할 수 있어요.', '#ff8787'); return; }
+  const merged = { id: nextId++, name: `${a.name}+${b.name} 통합`, zone: a.zone, time: Math.round((a.time + b.time) * 0.7), removable: false, simplifiable: false, combineGroup: null, component: null };
+  cards.splice(lo, 2, merged);
+  hint('✅ 두 공정을 하나로 통합했습니다.', '#69db7c');
+  selected.clear();
+  layoutStations();
+}
+
+/* 단순화: 실습생이 직접 아이디어를 입력 */
+function doSimplify() {
+  if (selected.size !== 1) { hint('간소화할 스테이션 1개를 클릭하세요.', '#ffd43b'); return; }
+  const id = Array.from(selected)[0];
+  const card = cards.find(c => c.id === id);
+  if (!card.simplifiable || card.simplified) { hint('⚠ 이 공정은 간소화할 수 없어요.', '#ff8787'); return; }
+  pendingSimplifyCardId = id;
+  document.getElementById('modal-station-name').textContent = `대상 공정: ${card.name} (현재 ${card.time}초)`;
+  document.getElementById('simplify-input').value = '';
+  document.getElementById('simplify-modal').style.display = 'flex';
+}
+function cancelSimplify() {
+  document.getElementById('simplify-modal').style.display = 'none';
+  pendingSimplifyCardId = null;
+}
+function submitSimplify() {
+  const idea = document.getElementById('simplify-input').value.trim();
+  if (!idea) { hint('아이디어를 먼저 입력해주세요.', '#ffd43b'); return; }
+  const card = cards.find(c => c.id === pendingSimplifyCardId);
+  document.getElementById('simplify-modal').style.display = 'none';
+  if (card) {
+    card.time = card.simplifiedTime;
+    card.simplified = true;
+    card.simplifyIdea = idea;
+    card.name += ' (간소화)';
+    hint(`✅ 아이디어 적용! "${card.name}" ${card.time}초로 단축되었습니다.`, '#69db7c');
+  }
+  selected.clear();
+  pendingSimplifyCardId = null;
+  layoutStations();
+}
+
+function resetAll() {
+  cards = currentMode === 'practice' ? practiceCards() : mainCards();
+  nextId = 1001;
+  selected.clear();
+  layoutStations();
+}
+
+/* ===================== 재배치용 순서띠 (Pointer Events - 마우스/터치 공용) ===================== */
+let dragState = null;
+function renderReorderStrip() {
+  const strip = document.getElementById('reorder-strip');
+  strip.innerHTML = '';
+  cards.forEach((card, idx) => {
+    const chip = document.createElement('div');
+    chip.className = 'chip';
+    chip.innerHTML = `<span class="chip-handle">⠿</span><span class="chip-body"><div>${card.name}</div><div class="chip-time">${card.time}초 · ${card.zone}</div></span>`;
+    const handle = chip.querySelector('.chip-handle');
+    handle.addEventListener('pointerdown', (e) => startChipDrag(e, chip, idx));
+    strip.appendChild(chip);
+  });
+}
+
+function startChipDrag(e, chip, fromIndex) {
+  e.preventDefault();
+  const handle = e.currentTarget;
+  try { handle.setPointerCapture(e.pointerId); } catch (err) {}
+  dragState = { fromIndex, hoverIndex: fromIndex, startX: e.clientX };
+  chip.classList.add('dragging');
+
+  function onMove(ev) {
+    if (!dragState) return;
+    const dx = ev.clientX - dragState.startX;
+    chip.style.transform = `translateX(${dx}px)`;
+    const strip = document.getElementById('reorder-strip');
+    const chips = Array.from(strip.children);
+    let closestIdx = dragState.fromIndex;
+    let closestDist = Infinity;
+    chips.forEach((c, i) => {
+      if (c === chip) return;
+      const rect = c.getBoundingClientRect();
+      const mid = rect.left + rect.width / 2;
+      const dist = Math.abs(ev.clientX - mid);
+      if (dist < closestDist) { closestDist = dist; closestIdx = i; }
+    });
+    chips.forEach(c => c.classList.remove('drag-over'));
+    if (closestIdx !== dragState.fromIndex) chips[closestIdx].classList.add('drag-over');
+    dragState.hoverIndex = closestIdx;
+  }
+
+  function onUp(ev) {
+    handle.removeEventListener('pointermove', onMove);
+    handle.removeEventListener('pointerup', onUp);
+    handle.removeEventListener('pointercancel', onUp);
+    chip.style.transform = '';
+    chip.classList.remove('dragging');
+    document.querySelectorAll('#reorder-strip .chip').forEach(c => c.classList.remove('drag-over'));
+    if (dragState && dragState.hoverIndex !== dragState.fromIndex) {
+      const moved = cards.splice(dragState.fromIndex, 1)[0];
+      cards.splice(dragState.hoverIndex, 0, moved);
+      dragState = null;
+      layoutStations();
+    } else {
+      dragState = null;
+    }
+  }
+
+  handle.addEventListener('pointermove', onMove);
+  handle.addEventListener('pointerup', onUp);
+  handle.addEventListener('pointercancel', onUp);
+}
+
+/* ===================== 기록 표시 (목표시간 없음 - 세션 최고기록 방식) ===================== */
+function updateMission() {
+  const timeNowEl = document.getElementById('time-now');
+  const statusEl = document.getElementById('mission-status');
+  const fill = document.getElementById('mission-progress-fill');
+  const bestLabelEl = document.getElementById('best-label');
+
+  if (!timeRevealed) {
+    timeNowEl.textContent = '❓ ---';
+    timeNowEl.style.color = '#adb5bd';
+    fill.style.width = '0%';
+    fill.style.background = '#495057';
+    statusEl.textContent = currentMode === 'practice'
+      ? '🎓 연습 중입니다 — 마음껏 눌러보고 시뮬레이션도 재생해보세요'
+      : '🎯 시뮬레이션을 재생해서 이번 조의 기록을 확인해보세요';
+    statusEl.style.color = '#adb5bd';
+    bestLabelEl.textContent = sessionBestTime !== null ? `현재 세션 최고 기록: ${sessionBestTime}초` : '아직 기록 없음';
+    return;
+  }
+  const total = computeTotal();
+  const startTotal = currentMode === 'practice' ? 225 : 1065;
+  const pct = Math.max(0, Math.min(100, ((startTotal - total) / startTotal) * 100));
+  timeNowEl.textContent = `${total}초`;
+  fill.style.width = pct + '%';
+  fill.style.background = '#4dabf7';
+  timeNowEl.style.color = '#4dabf7';
+
+  if (sessionBestTime === null || total < sessionBestTime) {
+    sessionBestTime = total;
+    statusEl.textContent = `🏆 이 세션 최고 기록입니다! (기준 대비 ${pct.toFixed(0)}% 단축)`;
+    statusEl.style.color = '#69db7c';
+  } else {
+    statusEl.textContent = `이번 기록 ${total}초 — 세션 최고 기록은 ${sessionBestTime}초입니다 (기준 대비 ${pct.toFixed(0)}% 단축)`;
+    statusEl.style.color = '#adb5bd';
+  }
+  bestLabelEl.textContent = `세션 최고 기록: ${sessionBestTime}초`;
+}
+
+/* ===================== 라인 시뮬레이션 (밸브가 조립되어가는 애니메이션) ===================== */
+const SCALE = 0.045; // 1 가상초 = 45ms
+let simSegments = [];
+let simSegIdx = 0;
+let simSegElapsed = 0;
+let simAccum = 0;
+let simLastTime = 0;
+
+function buildSegments() {
+  const n = cards.length;
+  const segs = [];
+  cards.forEach((card, i) => {
+    segs.push({ type: 'stay', x: slotZ(i, n), dur: card.time, card });
+    if (i < n - 1) {
+      const differs = card.zone !== cards[i + 1].zone;
+      segs.push({ type: 'travel', fromX: slotZ(i, n), toX: slotZ(i + 1, n), dur: differs ? TRANSIT_COST : 0 });
+    }
+  });
+  return segs;
+}
+
+function makeRawMaterialMesh() {
+  return shadeMesh(new THREE.Mesh(new THREE.IcosahedronGeometry(4, 0), new THREE.MeshStandardMaterial({ color: 0x77706a, metalness: 0.2, roughness: 0.85 })));
+}
+
+function advanceTokenAppearance(card) {
+  if (!tokenGroup || !card.component) return;
+  switch (card.component) {
+    case 'body_rough': {
+      tokenGroup.children.slice().forEach(c => tokenGroup.remove(c));
+      const bodyMat = new THREE.MeshStandardMaterial({ color: 0x8a8f94, metalness: 0.25, roughness: 0.75 });
+      const body = shadeMesh(new THREE.Mesh(new THREE.CylinderGeometry(6, 6, 14, 24), bodyMat));
+      const flangeTop = shadeMesh(new THREE.Mesh(new THREE.CylinderGeometry(8.5, 8.5, 2.2, 24), bodyMat));
+      flangeTop.position.y = 7.5;
+      const flangeBottom = shadeMesh(new THREE.Mesh(new THREE.CylinderGeometry(8.5, 8.5, 2.2, 24), bodyMat));
+      flangeBottom.position.y = -7.5;
+      tokenGroup.add(body, flangeTop, flangeBottom);
+      tokenParts.body = body; tokenParts.flangeTop = flangeTop; tokenParts.flangeBottom = flangeBottom;
+      break;
+    }
+    case 'body_finish': {
+      [tokenParts.body, tokenParts.flangeTop, tokenParts.flangeBottom].forEach(m => {
+        if (m) { m.material.color.set(0xc7ccd1); m.material.metalness = 0.85; m.material.roughness = 0.22; }
+      });
+      break;
+    }
+    case 'seat': {
+      const seat = shadeMesh(new THREE.Mesh(new THREE.TorusGeometry(3, 1, 8, 16), new THREE.MeshStandardMaterial({ color: 0xcd853f, metalness: 0.6, roughness: 0.4 })));
+      seat.rotation.x = Math.PI / 2; seat.position.y = -5;
+      tokenGroup.add(seat);
+      break;
+    }
+    case 'disc': {
+      const disc = shadeMesh(new THREE.Mesh(new THREE.SphereGeometry(3, 14, 10), new THREE.MeshStandardMaterial({ color: 0x555b63, metalness: 0.7, roughness: 0.3 })));
+      disc.scale.set(1, 0.5, 1); disc.position.y = -1;
+      tokenGroup.add(disc);
+      break;
+    }
+    case 'stem': {
+      const stem = shadeMesh(new THREE.Mesh(new THREE.CylinderGeometry(1.3, 1.3, 15, 12), new THREE.MeshStandardMaterial({ color: 0xd8dce0, metalness: 0.8, roughness: 0.25 })));
+      stem.position.y = 15;
+      tokenGroup.add(stem);
+      tokenParts.stem = stem;
+      break;
+    }
+    case 'packing': {
+      const pack = shadeMesh(new THREE.Mesh(new THREE.TorusGeometry(2, 0.8, 8, 16), new THREE.MeshStandardMaterial({ color: 0x2b2b2b, metalness: 0.2, roughness: 0.8 })));
+      pack.rotation.x = Math.PI / 2; pack.position.y = 8.5;
+      tokenGroup.add(pack);
+      break;
+    }
+    case 'crate': {
+      const crate = shadeMesh(new THREE.Mesh(new THREE.BoxGeometry(24, 30, 24), new THREE.MeshStandardMaterial({ color: 0xd8b98a, wireframe: true })));
+      tokenGroup.add(crate);
+      break;
+    }
+  }
+}
+
+function runSimulation() {
+  if (simRunning || cards.length === 0) return;
+  simSegments = buildSegments();
+  simSegIdx = 0; simSegElapsed = 0; simAccum = 0;
+  simRunning = true;
+  simLastTime = performance.now();
+  document.getElementById('sim-timer').style.display = 'block';
+
+  if (tokenGroup) scene.remove(tokenGroup);
+  tokenParts = {};
+  tokenGroup = new THREE.Group();
+  tokenGroup.add(makeRawMaterialMesh());
+  const firstX = simSegments[0].type === 'stay' ? simSegments[0].x : simSegments[0].fromX;
+  tokenGroup.position.set(firstX, 14, 0);
+  tokenGroup.scale.set(1, 1, 1);
+  scene.add(tokenGroup);
+}
+
+function stepSimulation() {
+  const now = performance.now();
+  const dtMs = now - simLastTime;
+  simLastTime = now;
+  if (simSegIdx >= simSegments.length) { finishSimulation(); return; }
+  const seg = simSegments[simSegIdx];
+  const visualDurMs = Math.max(seg.dur * SCALE * 1000, 230);
+  simSegElapsed += dtMs;
+  const progress = Math.min(1, simSegElapsed / visualDurMs);
+
+  if (seg.type === 'travel') {
+    tokenGroup.position.x = seg.fromX + (seg.toX - seg.fromX) * progress;
+    tokenGroup.position.y = 14;
+    tokenGroup.rotation.y += 0.02;
+  } else {
+    tokenGroup.position.x = seg.x;
+    tokenGroup.position.y = 14 + Math.sin(now * 0.008) * 1.5;
+  }
+  const displaySim = simAccum + seg.dur * progress;
+  document.getElementById('sim-timer').textContent = `진행: ${displaySim.toFixed(0)}초`;
+
+  if (progress >= 1) {
+    if (seg.type === 'stay') advanceTokenAppearance(seg.card);
+    simAccum += seg.dur;
+    simSegIdx++;
+    simSegElapsed = 0;
+  }
+}
+
+function finishSimulation() {
+  simRunning = false;
+  timeRevealed = true;
+  const total = computeTotal();
+  document.getElementById('sim-timer').textContent = `✅ 완제품(밸브) 완성: ${total}초`;
+  updateMission();
+
+  if (tokenGroup && tokenParts.stem) {
+    const wheelMat = new THREE.MeshStandardMaterial({ color: 0xD9534F, metalness: 0.5, roughness: 0.4 });
+    const wheel = shadeMesh(new THREE.Mesh(new THREE.TorusGeometry(5, 1, 10, 20), wheelMat));
+    wheel.position.y = 24;
+    tokenGroup.add(wheel);
+    for (let i = 0; i < 4; i++) {
+      const spoke = shadeMesh(new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.8, 9), wheelMat));
+      spoke.position.y = 24;
+      spoke.rotation.y = i * Math.PI / 2;
+      tokenGroup.add(spoke);
+    }
+  }
+  revealAnim = { active: true, start: performance.now(), duration: 700 };
+  setTimeout(() => { document.getElementById('sim-timer').style.display = 'none'; }, 2800);
+}
+
+/* ===================== 시작 (1단계: 연습 모드로 시작) ===================== */
+loadMode('practice');
+</script>
+</body>
+</html>
