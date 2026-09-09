@@ -1,0 +1,819 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>3D Poka-Yoke Integrated Interactive Simulator</title>
+    <style>
+        :root {
+            --bg-dark: #0f1216;
+            --panel-bg: rgba(22, 27, 34, 0.88);
+            --accent-blue: #00d2ff;
+            --accent-green: #00e676;
+            --accent-red: #ff1744;
+            --accent-yellow: #ffea00;
+            --text-main: #f0f6fc;
+        }
+
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-user-select: none;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        }
+
+        body, html {
+            margin: 0; padding: 0;
+            width: 100%; height: 100%;
+            overflow: hidden;
+            background-color: var(--bg-dark);
+            color: var(--text-main);
+        }
+
+        #canvas-container {
+            width: 100%; height: 100%;
+            position: absolute; top: 0; left: 0;
+            z-index: 1;
+        }
+
+        .hud-overlay {
+            position: absolute; top: 0; left: 0;
+            width: 100%; height: 100%;
+            z-index: 10;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 12px;
+        }
+
+        .interactive { pointer-events: auto; }
+
+        header {
+            background: var(--panel-bg);
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 10px 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .title-block h1 {
+            margin: 0; font-size: 1rem;
+            color: var(--accent-blue);
+        }
+        .title-block span {
+            font-size: 0.75rem;
+            color: #8b949e;
+        }
+
+        .andon-system {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            background: rgba(0,0,0,0.4);
+            padding: 6px 12px;
+            border-radius: 20px;
+            border: 1px solid rgba(255,255,255,0.05);
+        }
+
+        .andon-lights { display: flex; gap: 6px; }
+        .light {
+            width: 12px; height: 12px; border-radius: 50%; background: #333;
+            transition: all 0.3s;
+        }
+        .light.green.active { background: var(--accent-green); box-shadow: 0 0 10px var(--accent-green); }
+        .light.yellow.active { background: var(--accent-yellow); box-shadow: 0 0 10px var(--accent-yellow); }
+        .light.red.active { background: var(--accent-red); box-shadow: 0 0 10px var(--accent-red); }
+
+        .mode-bar {
+            display: flex; gap: 6px; margin-top: 8px;
+        }
+        .mode-btn {
+            flex: 1; padding: 8px 4px;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            color: #8b949e; border-radius: 6px;
+            font-size: 0.75rem; font-weight: bold;
+            cursor: pointer; text-align: center;
+            transition: all 0.2s;
+        }
+        .mode-btn.active {
+            background: var(--accent-blue); color: #000;
+            border-color: var(--accent-blue);
+            box-shadow: 0 0 10px rgba(0, 210, 255, 0.4);
+        }
+
+        .control-deck {
+            background: var(--panel-bg);
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px; padding: 12px;
+            display: flex; flex-direction: column; gap: 8px;
+        }
+
+        .guide-box {
+            font-size: 0.8rem; line-height: 1.3;
+            color: #c9d1d9; background: rgba(0,0,0,0.3);
+            padding: 8px; border-radius: 6px;
+            border-left: 3px solid var(--accent-blue);
+        }
+
+        .status-metrics {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 8px;
+            text-align: center;
+        }
+
+        .metric-card {
+            background: rgba(0,0,0,0.4);
+            padding: 6px;
+            border-radius: 6px;
+            border: 1px solid rgba(255,255,255,0.05);
+        }
+
+        .metric-card label {
+            display: block;
+            font-size: 0.65rem;
+            color: #8b949e;
+            margin-bottom: 2px;
+        }
+
+        .metric-card val {
+            font-size: 1rem;
+            font-weight: bold;
+            font-family: monospace;
+            color: var(--text-main);
+        }
+
+        .btn-action {
+            width: 100%;
+            padding: 12px;
+            background: linear-gradient(135deg, #00d2ff, #0072ff);
+            border: none;
+            border-radius: 8px;
+            color: white;
+            font-weight: bold;
+            font-size: 0.9rem;
+            cursor: pointer;
+            box-shadow: 0 4px 15px rgba(0, 210, 255, 0.3);
+            transition: transform 0.1s;
+        }
+        .btn-action:active { transform: scale(0.98); }
+
+        .btn-toggle-poka {
+            background: rgba(255,255,255,0.05);
+            border: 1px solid var(--accent-yellow);
+            color: var(--accent-yellow); padding: 8px;
+            border-radius: 6px; font-size: 0.8rem;
+            font-weight: bold; cursor: pointer; width: 100%;
+        }
+        .btn-toggle-poka.active {
+            background: var(--accent-yellow); color: #000;
+        }
+
+        .tool-tray {
+            display: flex; gap: 8px; justify-content: space-around;
+            background: rgba(0,0,0,0.4); padding: 8px; border-radius: 8px;
+        }
+        .draggable-tool {
+            padding: 8px 12px; background: #21262d; border: 1px solid #30363d;
+            border-radius: 6px; font-size: 0.75rem; font-weight: bold;
+            color: var(--accent-blue); cursor: pointer; text-align: center;
+            flex: 1;
+        }
+        .draggable-tool:active { background: var(--accent-blue); color: #000; }
+
+        #alert-banner {
+            position: absolute; top: 20%; left: 50%;
+            transform: translate(-50%, -50%);
+            padding: 10px 20px; border-radius: 20px;
+            font-weight: bold; font-size: 0.9rem;
+            display: none; z-index: 20; text-align: center;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.6);
+            animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        @keyframes popIn {
+            0% { transform: translate(-50%, -50%) scale(0.5); opacity: 0; }
+            100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+        }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+</head>
+<body>
+
+    <div id="canvas-container"></div>
+
+    <div class="hud-overlay">
+        <div>
+            <header class="interactive">
+                <div class="title-block">
+                    <h1>POKA-YOKE 3D INTEGRATED SIMULATOR</h1>
+                    <span>스마트 풀푸르프 공정 제어 실습 라인</span>
+                </div>
+                <div class="andon-system">
+                    <span style="font-size:0.7rem; color:#8b949e; font-weight:bold;">ANDON</span>
+                    <div class="andon-lights">
+                        <div id="light-green" class="light green active"></div>
+                        <div id="light-yellow" class="light yellow"></div>
+                        <div id="light-red" class="light red"></div>
+                    </div>
+                </div>
+            </header>
+
+            <div class="mode-bar interactive">
+                <div class="mode-btn active" onclick="setStage(1)">1. 접촉식 (가이드 핀)</div>
+                <div class="mode-btn" onclick="setStage(2)">2. 정수식 (나사 체결)</div>
+                <div class="mode-btn" onclick="setStage(3)">3. 동작순서식 (정교한 3D 툴)</div>
+            </div>
+        </div>
+
+        <div id="alert-banner"></div>
+
+        <div class="control-deck interactive">
+            <button id="poka-toggle-btn" class="btn-toggle-poka" onclick="togglePokaYoke()">
+                포카요케 장치: OFF (일반 수동 상태)
+            </button>
+
+            <div id="guide-text" class="guide-box">
+                가이드
+            </div>
+
+            <div class="status-metrics">
+                <div class="metric-card">
+                    <label>시도 수</label>
+                    <val id="m-total">0</val>
+                </div>
+                <div class="metric-card">
+                    <label>양품</label>
+                    <val id="m-good" style="color:var(--accent-green);">0</val>
+                </div>
+                <div class="metric-card">
+                    <label>불량/실패</label>
+                    <val id="m-bad" style="color:var(--accent-red);">0</val>
+                </div>
+                <div class="metric-card">
+                    <label>손실 비용</label>
+                    <val id="m-cost" style="color:var(--accent-yellow);">$0</val>
+                </div>
+            </div>
+
+            <button id="action-btn" class="btn-action" style="display:none;" onclick="runStage1()">
+                3D 커넥터 결합 시도 (클릭)
+            </button>
+
+            <div id="tool-tray" class="tool-tray" style="display:none;">
+                <div class="draggable-tool" id="tool-clean" onclick="useTool(1)">1. 세척 에어건</div>
+                <div class="draggable-tool" id="tool-coat" onclick="useTool(2)">2. 액체 디스펜서</div>
+                <div class="draggable-tool" id="tool-assemble" onclick="useTool(3)">3. 프레스 헤드</div>
+            </div>
+
+            <button id="stage2-finish-btn" class="draggable-tool" style="display:none; background:var(--accent-blue); color:#000;" onclick="finishStage2()">
+                제품 배출 (나사 체결 검증)
+            </button>
+        </div>
+    </div>
+
+    <script>
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        function playSound(type) {
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.connect(gain); gain.connect(audioCtx.destination);
+
+            if (type === 'success') {
+                osc.type = 'sine'; osc.frequency.setValueAtTime(523.25, audioCtx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(880, audioCtx.currentTime + 0.15);
+                gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.2);
+                osc.start(); osc.stop(audioCtx.currentTime + 0.2);
+            } else if (type === 'error') {
+                osc.type = 'sawtooth'; osc.frequency.setValueAtTime(180, audioCtx.currentTime);
+                gain.gain.setValueAtTime(0.4, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.25);
+                osc.start(); osc.stop(audioCtx.currentTime + 0.25);
+            } else if (type === 'screw') {
+                osc.type = 'sawtooth'; osc.frequency.setValueAtTime(350, audioCtx.currentTime);
+                osc.frequency.linearRampToValueAtTime(180, audioCtx.currentTime + 0.12);
+                gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.12);
+                osc.start(); osc.stop(audioCtx.currentTime + 0.12);
+            } else if (type === 'block') {
+                osc.type = 'square'; osc.frequency.setValueAtTime(150, audioCtx.currentTime);
+                osc.frequency.setValueAtTime(100, audioCtx.currentTime + 0.08);
+                gain.gain.setValueAtTime(0.25, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.15);
+                osc.start(); osc.stop(audioCtx.currentTime + 0.15);
+            } else {
+                osc.type = 'triangle'; osc.frequency.setValueAtTime(350, audioCtx.currentTime);
+                gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.05);
+                osc.start(); osc.stop(audioCtx.currentTime + 0.05);
+            }
+        }
+
+        let scene, camera, renderer, controls;
+        let currentStage = 1;
+        let pokaYokeActive = false;
+        let metrics = { total: 0, good: 0, bad: 0, cost: 0 };
+
+        let connectorMesh, connMeshMaterial, guidePinMesh;
+        let isSpinning = true;
+        let isAligning = false;
+
+        let screwHoles = [], screwsInserted = [];
+        const requiredHoles = [0, 2, 5, 7];
+
+        let shutterMesh, sensorBox;
+        let stage3Tools = [];
+        let currentSeqStep = 0; // 진행된 올바른 단계 카운트
+
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector2();
+
+        function init3D() {
+            const container = document.getElementById('canvas-container');
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x0f1216);
+            scene.fog = new THREE.FogExp2(0x0f1216, 0.03);
+
+            camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
+            camera.position.set(0, 6, 9);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.shadowMap.enabled = true;
+            container.appendChild(renderer.domElement);
+
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
+            scene.add(ambientLight);
+
+            const dirLight = new THREE.DirectionalLight(0x00d2ff, 0.8);
+            dirLight.position.set(5, 12, 7);
+            dirLight.castShadow = true;
+            scene.add(dirLight);
+
+            const grid = new THREE.GridHelper(20, 20, 0x00d2ff, 0x222222);
+            grid.position.y = -0.01;
+            scene.add(grid);
+
+            const jigGeo = new THREE.BoxGeometry(3, 0.6, 2);
+            const jigMat = new THREE.MeshStandardMaterial({ color: 0x2a323d, roughness: 0.3, metalness: 0.8 });
+            const baseJig = new THREE.Mesh(jigGeo, jigMat);
+            baseJig.position.y = 0.3;
+            baseJig.receiveShadow = true;
+            baseJig.castShadow = true;
+            scene.add(baseJig);
+
+            const holeGeo = new THREE.BoxGeometry(1.6, 0.2, 1);
+            const holeMat = new THREE.MeshBasicMaterial({ color: 0x050505 });
+            const hole = new THREE.Mesh(holeGeo, holeMat);
+            hole.position.set(0, 0.51, 0);
+            scene.add(hole);
+
+            setupStage1Objects();
+            setupStage2Objects();
+            setupStage3Objects();
+
+            window.addEventListener('pointerdown', onPointerDown);
+            window.addEventListener('resize', onWindowResize);
+
+            setStage(1);
+            animate();
+        }
+
+        function setupStage1Objects() {
+            const connGroup = new THREE.Group();
+            
+            const connGeo = new THREE.BoxGeometry(1.5, 0.8, 0.9);
+            connMeshMaterial = new THREE.MeshStandardMaterial({ color: 0x3498db, roughness: 0.2, metalness: 0.5 });
+            const connMesh = new THREE.Mesh(connGeo, connMeshMaterial);
+            connMesh.castShadow = true;
+            connGroup.add(connMesh);
+
+            const notchGeo = new THREE.CylinderGeometry(0.12, 0.12, 0.9, 16);
+            const notchMat = new THREE.MeshStandardMaterial({ color: 0xe74c3c });
+            const notch = new THREE.Mesh(notchGeo, notchMat);
+            notch.position.set(0.6, 0, 0.45);
+            connGroup.add(notch);
+
+            connectorMesh = connGroup;
+            connectorMesh.position.set(0, 2.5, 0);
+            scene.add(connectorMesh);
+
+            const pinGeo = new THREE.CylinderGeometry(0.08, 0.08, 1.2, 16);
+            const pinMat = new THREE.MeshStandardMaterial({ color: 0xffea00, metalness: 0.9, roughness: 0.1 });
+            guidePinMesh = new THREE.Mesh(pinGeo, pinMat);
+            guidePinMesh.position.set(0.6, 0.9, 0.45);
+            guidePinMesh.visible = false;
+            scene.add(guidePinMesh);
+        }
+
+        function setupStage2Objects() {
+            screwHoles = [];
+            const offsets = [
+                [-1.2, -0.8], [0, -0.8], [1.2, -0.8],
+                [-1.2, 0],    [1.2, 0],
+                [-1.2, 0.8],  [0, 0.8],  [1.2, 0.8]
+            ];
+
+            offsets.forEach((pos, idx) => {
+                const holeGroup = new THREE.Group();
+                const holeGeo = new THREE.CylinderGeometry(0.15, 0.15, 0.1, 16);
+                const holeMat = new THREE.MeshBasicMaterial({ color: 0x111111 });
+                const holeMesh = new THREE.Mesh(holeGeo, holeMat);
+                holeMesh.position.set(pos[0], 0.61, pos[1]);
+                holeGroup.add(holeMesh);
+
+                const ringGeo = new THREE.RingGeometry(0.18, 0.25, 16);
+                const ringMat = new THREE.MeshBasicMaterial({ color: 0x00e676, side: THREE.DoubleSide });
+                const ringMesh = new THREE.Mesh(ringGeo, ringMat);
+                ringMesh.rotation.x = Math.PI / 2;
+                ringMesh.position.set(pos[0], 0.62, pos[1]);
+                ringMesh.visible = false;
+                holeGroup.add(ringMesh);
+
+                holeGroup.userData = { id: idx, ring: ringMesh, pos: pos, filled: false };
+                scene.add(holeGroup);
+                screwHoles.push(holeGroup);
+            });
+        }
+
+        // 디테일이 보완된 3D 공구 디자인 생성
+        function setupStage3Objects() {
+            const shutterGeo = new THREE.BoxGeometry(2.2, 1.8, 0.1);
+            const shutterMat = new THREE.MeshStandardMaterial({ color: 0xff1744, transparent: true, opacity: 0.85 });
+            shutterMesh = new THREE.Mesh(shutterGeo, shutterMat);
+            shutterMesh.position.set(0, 1.2, 0);
+            shutterMesh.visible = false;
+            scene.add(shutterMesh);
+
+            const sensorGeo = new THREE.BoxGeometry(0.4, 1.2, 0.4);
+            const sensorMat = new THREE.MeshStandardMaterial({ color: 0x222222, metalness: 0.8 });
+            sensorBox = new THREE.Mesh(sensorGeo, sensorMat);
+            sensorBox.position.set(-2.0, 1.0, 0);
+            sensorBox.visible = false;
+            scene.add(sensorBox);
+
+            stage3Tools = [];
+
+            // 1. 디테일한 에어 세척건 (파란색 메인 Body + 노즐 + 손잡이)
+            const cleanTool = new THREE.Group();
+            const matBlue = new THREE.MeshStandardMaterial({ color: 0x00d2ff, metalness: 0.6 });
+            const matSilver = new THREE.MeshStandardMaterial({ color: 0xbdc3c7, metalness: 0.9, roughness: 0.1 });
+
+            const body1 = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.6, 0.25), matBlue);
+            const handle1 = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.5, 12), matBlue);
+            handle1.rotation.z = Math.PI / 4; handle1.position.set(-0.2, -0.2, 0);
+            const nozzle1 = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.08, 0.6, 12), matSilver);
+            nozzle1.position.set(0, -0.4, 0);
+            cleanTool.add(body1, handle1, nozzle1);
+            cleanTool.position.set(-1.2, 2.5, 0);
+            cleanTool.visible = false;
+            scene.add(cleanTool);
+            stage3Tools.push({ group: cleanTool, homeY: 2.5 });
+
+            // 2. 액체 디스펜서 (노란색 액체 실린더 + 정밀 바늘 노즐)
+            const coatTool = new THREE.Group();
+            const matYellow = new THREE.MeshStandardMaterial({ color: 0xffea00, transparent: true, opacity: 0.85 });
+            const matDark = new THREE.MeshStandardMaterial({ color: 0x333333, metalness: 0.8 });
+
+            const cylinder2 = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.18, 0.7, 16), matYellow);
+            const cap2 = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.15, 16), matDark);
+            cap2.position.y = 0.35;
+            const needle2 = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.4, 12), matSilver);
+            needle2.position.y = -0.45;
+            coatTool.add(cylinder2, cap2, needle2);
+            coatTool.position.set(0, 2.5, 0);
+            coatTool.visible = false;
+            scene.add(coatTool);
+            stage3Tools.push({ group: coatTool, homeY: 2.5 });
+
+            // 3. 서보 프레스 헤드 (강력한 유압 실린더 + 헤드 블록)
+            const assembleTool = new THREE.Group();
+            const matGreen = new THREE.MeshStandardMaterial({ color: 0x00e676, metalness: 0.5 });
+
+            const mainPiston = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.25, 0.6, 16), matDark);
+            const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 0.5, 16), matSilver);
+            shaft.position.y = -0.3;
+            const pressPlate = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.15, 0.9), matGreen);
+            pressPlate.position.y = -0.55;
+            assembleTool.add(mainPiston, shaft, pressPlate);
+            assembleTool.position.set(1.2, 2.5, 0);
+            assembleTool.visible = false;
+            scene.add(assembleTool);
+            stage3Tools.push({ group: assembleTool, homeY: 2.5 });
+        }
+
+        function onPointerDown(e) {
+            if (currentStage === 2) {
+                mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+                mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+
+                raycaster.setFromCamera(mouse, camera);
+                screwHoles.forEach(h => {
+                    const intersects = raycaster.intersectObjects(h.children);
+                    if (intersects.length > 0 && !h.userData.filled) {
+                        h.userData.filled = true;
+                        playSound('screw');
+
+                        const screwGeo = new THREE.CylinderGeometry(0.1, 0.1, 0.3, 16);
+                        const screwMat = new THREE.MeshStandardMaterial({ color: 0xffea00, metalness: 0.8 });
+                        const screw = new THREE.Mesh(screwGeo, screwMat);
+                        screw.position.set(h.userData.pos[0], 0.75, h.userData.pos[1]);
+                        scene.add(screw);
+                        screwsInserted.push(screw);
+                    }
+                });
+            }
+        }
+
+        function runStage1() {
+            isSpinning = false;
+            const currentRad = Math.abs(connectorMesh.rotation.y % (Math.PI * 2));
+            const isAlignedByChance = (currentRad < 0.6 || currentRad > (Math.PI * 2 - 0.6));
+
+            if (pokaYokeActive) {
+                isAligning = true;
+                playSound('click');
+
+                setTimeout(() => {
+                    connectorMesh.position.y = 0.7;
+                    setAndon('green');
+                    playSound('success');
+                    updateMetrics(true);
+                    showAlert("✨ [풀푸로프 성공] 가이드 핀이 각도를 자동으로 맞춰주어 실수 없이 착! 결합되었습니다.", true);
+                    setTimeout(resetState, 2200);
+                }, 300);
+            } else {
+                if (isAlignedByChance) {
+                    connectorMesh.rotation.y = 0;
+                    connectorMesh.position.y = 0.7;
+                    setAndon('green');
+                    playSound('success');
+                    updateMetrics(true);
+                    showAlert("🎯 [겨우 성공!] 딱 맞는 각도에 타이밍이 맞춰져 결합되었습니다.", true);
+                    setTimeout(resetState, 2200);
+                } else {
+                    connectorMesh.position.y = 1.5;
+                    connMeshMaterial.color.setHex(0xffea00);
+                    setAndon('yellow');
+                    playSound('block');
+                    updateMetrics(false);
+                    showAlert("⚠️ [결합 실패] 각도가 안 맞아 턱에 걸렸습니다! 가이드가 없어 맞추기가 어렵습니다. (-$500)", false, true);
+
+                    setTimeout(() => {
+                        connectorMesh.position.y = 2.5;
+                        connMeshMaterial.color.setHex(0x3498db);
+                        isSpinning = true;
+                    }, 1800);
+                }
+            }
+        }
+
+        function setStage(stageNum) {
+            playSound('click');
+            currentStage = stageNum;
+            document.querySelectorAll('.mode-btn').forEach((btn, i) => btn.classList.toggle('active', i + 1 === stageNum));
+            resetState();
+        }
+
+        function togglePokaYoke() {
+            playSound('click');
+            pokaYokeActive = !pokaYokeActive;
+            const btn = document.getElementById('poka-toggle-btn');
+            btn.classList.toggle('active', pokaYokeActive);
+            btn.innerText = pokaYokeActive ? "포카요케 장치: ON (실수 차단 및 자동 검증)" : "포카요케 장치: OFF (일반 수동 상태)";
+            resetState();
+        }
+
+        function updateMetrics(isGood) {
+            metrics.total++;
+            if (isGood) metrics.good++;
+            else { metrics.bad++; metrics.cost += 500; }
+
+            document.getElementById('m-total').innerText = metrics.total;
+            document.getElementById('m-good').innerText = metrics.good;
+            document.getElementById('m-bad').innerText = metrics.bad;
+            document.getElementById('m-cost').innerText = `$${metrics.cost}`;
+        }
+
+        function resetState() {
+            const guide = document.getElementById('guide-text');
+            const toolTray = document.getElementById('tool-tray');
+            const stage1Btn = document.getElementById('action-btn');
+            const stage2Btn = document.getElementById('stage2-finish-btn');
+
+            connectorMesh.visible = (currentStage === 1);
+            guidePinMesh.visible = (currentStage === 1 && pokaYokeActive);
+            stage1Btn.style.display = (currentStage === 1) ? 'block' : 'none';
+            
+            screwHoles.forEach(h => {
+                h.visible = (currentStage === 2);
+                h.userData.ring.visible = (currentStage === 2 && pokaYokeActive && requiredHoles.includes(h.userData.id));
+            });
+
+            shutterMesh.visible = false;
+            sensorBox.visible = (currentStage === 3 && pokaYokeActive);
+            toolTray.style.display = (currentStage === 3) ? 'flex' : 'none';
+            stage2Btn.style.display = (currentStage === 2) ? 'block' : 'none';
+
+            stage3Tools.forEach(t => {
+                t.group.visible = (currentStage === 3);
+                t.group.position.set(t.group.position.x, t.homeY, 0);
+            });
+
+            connectorMesh.position.set(0, 2.5, 0);
+            connectorMesh.rotation.set(0, 0, 0);
+            connMeshMaterial.color.setHex(0x3498db);
+            isSpinning = true;
+            isAligning = false;
+
+            screwsInserted.forEach(s => scene.remove(s));
+            screwsInserted = [];
+            screwHoles.forEach(h => h.userData.filled = false);
+
+            currentSeqStep = 0;
+
+            if (currentStage === 1) {
+                guide.innerHTML = pokaYokeActive 
+                    ? "<b>[접촉식 - 포카요케 ON]</b> 황색 가이드 핀이 설치되어 있어, <b>어떤 방향에서 시도해도 알아서 정방향으로 유도되어 100% 결합</b>됩니다!"
+                    : "<b>[접촉식 - 포카요케 OFF]</b> 가이드가 없습니다. 뱅글뱅글 돌아가는 상태에서 <b>정확한 각도(0도)를 딱 맞추지 못하면 걸려서 결합에 실패</b>합니다!";
+            } else if (currentStage === 2) {
+                guide.innerHTML = pokaYokeActive 
+                    ? "<b>[정수식 - 포카요케 ON]</b> 체결 위치 4곳에 그린 링이 안내됩니다. 4개를 모두 안 조이면 배출 버튼이 눌리지 않습니다."
+                    : "<b>[정수식 - 포카요케 OFF]</b> 작업자가 감으로 나사를 조입니다. 수량이 모자란 상태로 배출하면 불량이 유출됩니다.";
+            } else if (currentStage === 3) {
+                guide.innerHTML = pokaYokeActive 
+                    ? "<b>[동작순서식 - 포카요케 ON]</b> [1.세척 -> 2.도포 -> 3.조립] 순서로 눌러야 합니다. <b>동일 공정 중복 또는 순서 위반 시 차단 셔터</b>가 하강합니다."
+                    : "<b>[동작순서식 - 포카요케 OFF]</b> 제어 장치가 없어 1번을 연속 누르거나 순서를 어겨도 그대로 작동하여 <b>공정 불량</b>이 유출됩니다!";
+            }
+
+            setAndon('green');
+        }
+
+        function finishStage2() {
+            const count = screwsInserted.length;
+            if (pokaYokeActive) {
+                if (count < 4) {
+                    playSound('error');
+                    setAndon('yellow');
+                    updateMetrics(false);
+                    showAlert(`🛑 [포카요케 차단] 나사가 ${count}/4개만 체결되었습니다. 라인 출하를 정지합니다.`, false, true);
+                } else {
+                    playSound('success');
+                    setAndon('green');
+                    updateMetrics(true);
+                    showAlert("✅ [양품] 규정 수량 4개 체결 확인. 배출 승인!", true);
+                    setTimeout(resetState, 1500);
+                }
+            } else {
+                if (count < 4) {
+                    playSound('error');
+                    setAndon('red');
+                    updateMetrics(false);
+                    showAlert(`💥 [불량 유출] 나사 ${4 - count}개 누락 상태로 제품이 통과되었습니다! (-$500)`, false);
+                } else {
+                    playSound('success');
+                    setAndon('green');
+                    updateMetrics(true);
+                    showAlert("✅ [양품] 나사가 정상 체결되었습니다.", true);
+                }
+                setTimeout(resetState, 1500);
+            }
+        }
+
+        function triggerToolAnim(toolIndex, onComplete) {
+            const tool = stage3Tools[toolIndex];
+            tool.group.position.y = 1.1; // 수직 하강 작동 시각화
+            setTimeout(() => {
+                tool.group.position.y = tool.homeY;
+                if (onComplete) onComplete();
+            }, 450);
+        }
+
+        // --- 3단계 엄격한 공정 순서 및 중복 로직 검증 ---
+        function useTool(step) {
+            if (currentStage !== 3) return;
+
+            if (pokaYokeActive) {
+                // [포카요케 ON]: 정확히 차례에 맞는 공정을 누를 때만 동작
+                if (step === currentSeqStep + 1) {
+                    currentSeqStep = step;
+                    playSound('click');
+                    triggerToolAnim(step - 1);
+
+                    if (step === 1) showAlert("1단계: 세척 에어건 작동 완료 (센서 정상 승인)", true);
+                    if (step === 2) showAlert("2단계: 액체 디스펜서 정량 도포 완료 (센서 정상 승인)", true);
+                    if (step === 3) {
+                        playSound('success');
+                        updateMetrics(true);
+                        showAlert("✅ [양품] 올바른 순서 검증 완수! 조립이 최종 완료되었습니다.", true);
+                        setTimeout(resetState, 1800);
+                    }
+                } else {
+                    // 순서를 건너뛰거나 이미 진행한 동일 공정을 중복 눌렀을 때
+                    playSound('error');
+                    setAndon('red');
+                    shutterMesh.visible = true; // 차단 셔터 하강
+                    updateMetrics(false);
+                    if (step <= currentSeqStep) {
+                        showAlert("🛑 [포카요케 차단] 이미 진행된 공정을 중복 실행하였습니다! 차단 셔터 하강.", false);
+                    } else {
+                        showAlert("🛑 [포카요케 차단] 공정 순서를 위반하였습니다! (선행 공정 미완료)", false);
+                    }
+                    setTimeout(() => { shutterMesh.visible = false; setAndon('green'); }, 2000);
+                }
+            } else {
+                // [포카요케 OFF]: 중복 클릭 시나 순서 위반 시 불량 유출 판정
+                if (step === currentSeqStep + 1) {
+                    currentSeqStep = step;
+                    playSound('click');
+                    triggerToolAnim(step - 1);
+
+                    if (step === 3) {
+                        playSound('success');
+                        updateMetrics(true);
+                        showAlert("✅ [양품] 순서대로 완수되었습니다.", true);
+                        setTimeout(resetState, 1800);
+                    }
+                } else {
+                    // 포카요케가 꺼져있어 올바르지 않은 조작(중복 클릭, 순서 어김)이 진행되어 불량 발생
+                    playSound('error');
+                    setAndon('red');
+                    triggerToolAnim(step - 1);
+                    updateMetrics(false);
+
+                    if (step <= currentSeqStep) {
+                        showAlert(`💥 [공정 중복 불량] ${step}번 공정을 중복 작동하여 제품 손상이 발생했습니다! (-$500)`, false);
+                    } else {
+                        showAlert(`💥 [순서 위반 불량] 필수 선행 공정을 건너뛰고 조작하여 불량이 통과되었습니다! (-$500)`, false);
+                    }
+                    setTimeout(resetState, 2000);
+                }
+            }
+        }
+
+        function setAndon(color) {
+            document.getElementById('light-green').classList.toggle('active', color === 'green');
+            document.getElementById('light-yellow').classList.toggle('active', color === 'yellow');
+            document.getElementById('light-red').classList.toggle('active', color === 'red');
+        }
+
+        function showAlert(msg, isSuccess, isWarning = false) {
+            const alert = document.getElementById('alert-banner');
+            alert.innerText = msg;
+            alert.style.display = 'block';
+
+            if (isWarning) {
+                alert.style.background = 'rgba(255, 234, 0, 0.95)';
+                alert.style.color = '#000';
+            } else {
+                alert.style.background = isSuccess ? 'rgba(0, 230, 118, 0.95)' : 'rgba(255, 23, 68, 0.95)';
+                alert.style.color = isSuccess ? '#000' : '#fff';
+            }
+
+            setTimeout(() => { alert.style.display = 'none'; }, 2000);
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+
+            if (currentStage === 1 && isSpinning) {
+                connectorMesh.rotation.y += 0.04;
+            }
+
+            if (currentStage === 1 && isAligning) {
+                const targetRot = 0;
+                const diff = targetRot - (connectorMesh.rotation.y % (Math.PI * 2));
+                connectorMesh.rotation.y += diff * 0.2;
+                if (Math.abs(diff) < 0.05) {
+                    connectorMesh.rotation.y = 0;
+                    isAligning = false;
+                }
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        window.onload = init3D;
+    </script>
+</body>
+</html>
