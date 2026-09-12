@@ -1,0 +1,606 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>리더십 좌표 진단</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@400;600;700&family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#16233F;
+    --ink-soft:#3D4A66;
+    --paper:#F1EFE6;
+    --paper-line:#D9D5C4;
+    --brass:#B0813A;
+    --brass-soft:#E4CFA1;
+    --card:#FBFAF5;
+    --danger:#8C4B3D;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:
+      repeating-linear-gradient(0deg, transparent, transparent 39px, var(--paper-line) 40px),
+      repeating-linear-gradient(90deg, transparent, transparent 39px, var(--paper-line) 40px),
+      var(--paper);
+    background-size: 40px 40px, 40px 40px, cover;
+    color:var(--ink);
+    font-family:'Noto Sans KR', sans-serif;
+    min-height:100vh;
+    display:flex;
+    align-items:flex-start;
+    justify-content:center;
+    padding:32px 16px;
+  }
+  .stage{
+    width:100%;
+    max-width:640px;
+  }
+  .brandbar{
+    display:flex;
+    align-items:baseline;
+    justify-content:space-between;
+    margin-bottom:18px;
+    padding-bottom:10px;
+    border-bottom:1.5px solid var(--ink);
+  }
+  .brandbar .mark{
+    font-family:'Noto Serif KR', serif;
+    font-weight:700;
+    font-size:15px;
+    letter-spacing:0.02em;
+  }
+  .brandbar .idx{
+    font-size:12px;
+    color:var(--ink-soft);
+  }
+  .panel{
+    background:var(--card);
+    border:1.5px solid var(--ink);
+    box-shadow:5px 5px 0 rgba(22,35,63,0.12);
+    padding:36px 32px;
+  }
+  @media (max-width:480px){
+    .panel{padding:26px 20px;}
+  }
+
+  /* INTRO */
+  .intro h1{
+    font-family:'Noto Serif KR', serif;
+    font-size:28px;
+    line-height:1.4;
+    margin:0 0 14px;
+  }
+  .intro p{
+    font-size:14.5px;
+    line-height:1.75;
+    color:var(--ink-soft);
+    margin:0 0 12px;
+  }
+  .axis-preview{
+    display:flex;
+    flex-direction:column;
+    gap:10px;
+    margin:24px 0 28px;
+    padding:18px;
+    background:var(--paper);
+    border:1px solid var(--paper-line);
+  }
+  .axis-preview .row{
+    display:flex;
+    justify-content:space-between;
+    font-size:13px;
+  }
+  .axis-preview .row b{font-weight:700;}
+  .axis-preview .row span:last-child{color:var(--brass);font-weight:700;}
+
+  /* QUESTIONS */
+  .qhead{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    margin-bottom:6px;
+  }
+  .qtag{
+    font-size:11px;
+    letter-spacing:0.06em;
+    color:var(--brass);
+    font-weight:700;
+  }
+  .qcount{
+    font-size:12px;
+    color:var(--ink-soft);
+  }
+  .track{
+    height:5px;
+    background:var(--paper-line);
+    margin:10px 0 26px;
+    position:relative;
+  }
+  .track i{
+    position:absolute;top:0;left:0;height:100%;
+    background:var(--ink);
+    transition:width .35s ease;
+  }
+  .qtext{
+    font-family:'Noto Serif KR', serif;
+    font-size:21px;
+    line-height:1.55;
+    margin:0 0 28px;
+  }
+  .scale{
+    display:flex;
+    gap:8px;
+    justify-content:space-between;
+  }
+  .scale button{
+    flex:1;
+    padding:14px 4px 10px;
+    border:1.5px solid var(--ink);
+    background:var(--card);
+    color:var(--ink);
+    font-family:'Noto Sans KR',sans-serif;
+    font-size:12px;
+    cursor:pointer;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:8px;
+    transition:background .15s, color .15s;
+  }
+  .scale button .dot{
+    width:10px;height:10px;border-radius:50%;
+    border:1.5px solid var(--ink);
+  }
+  .scale button:hover{background:var(--brass-soft);}
+  .scale button:active{background:var(--ink);color:#fff;}
+  .scale button:active .dot{background:#fff;}
+  .nav-row{
+    display:flex;
+    justify-content:space-between;
+    margin-top:22px;
+  }
+  .linklike{
+    background:none;border:none;
+    color:var(--ink-soft);
+    font-size:13px;
+    text-decoration:underline;
+    cursor:pointer;
+    padding:0;
+  }
+
+  button.cta{
+    background:var(--ink);
+    color:var(--paper);
+    border:none;
+    padding:14px 26px;
+    font-size:14.5px;
+    font-weight:700;
+    cursor:pointer;
+    font-family:'Noto Sans KR',sans-serif;
+  }
+  button.cta:hover{background:var(--ink-soft);}
+
+  /* RESULT */
+  .hidden{display:none !important;}
+  .result-head{
+    display:flex;
+    gap:20px;
+    align-items:center;
+    margin-bottom:22px;
+    padding-bottom:22px;
+    border-bottom:1.5px dashed var(--paper-line);
+  }
+  .icon-wrap{
+    width:76px;height:76px;
+    border:1.5px solid var(--ink);
+    background:var(--paper);
+    flex:none;
+    display:flex;align-items:center;justify-content:center;
+  }
+  .icon-wrap svg{width:42px;height:42px;stroke:var(--ink);}
+  .result-title .eyebrow{
+    font-size:11.5px;color:var(--brass);font-weight:700;letter-spacing:0.04em;
+  }
+  .result-title h2{
+    font-family:'Noto Serif KR', serif;
+    font-size:25px;
+    margin:4px 0 4px;
+  }
+  .result-title .tagline{
+    font-size:13.5px;color:var(--ink-soft);
+  }
+
+  .coords{
+    display:flex;flex-direction:column;gap:16px;
+    margin-bottom:26px;
+  }
+  .coord-row .labels{
+    display:flex;justify-content:space-between;
+    font-size:12px;color:var(--ink-soft);margin-bottom:5px;
+  }
+  .coord-row .labels b{color:var(--ink);}
+  .bar{
+    height:8px;background:var(--paper-line);position:relative;
+  }
+  .bar i{
+    position:absolute;top:-3px;
+    width:14px;height:14px;
+    background:var(--brass);
+    border:1.5px solid var(--ink);
+    border-radius:50%;
+    transform:translateX(-50%);
+  }
+
+  .section-block{margin-bottom:20px;}
+  .section-block h3{
+    font-family:'Noto Serif KR', serif;
+    font-size:15.5px;
+    margin:0 0 8px;
+    display:flex;align-items:center;gap:8px;
+  }
+  .section-block h3::before{
+    content:"";
+    width:6px;height:6px;
+    background:var(--brass);
+    display:inline-block;
+  }
+  .section-block p, .section-block li{
+    font-size:13.8px;line-height:1.7;color:var(--ink-soft);
+  }
+  .section-block ul{margin:0;padding-left:18px;}
+  .section-block li{margin-bottom:5px;}
+
+  .tip-box{
+    background:var(--paper);
+    border:1px solid var(--paper-line);
+    padding:16px 18px;
+    margin-top:6px;
+  }
+
+  .footer-actions{
+    margin-top:28px;
+    display:flex;gap:10px;flex-wrap:wrap;
+  }
+  .footer-actions button{
+    flex:1;min-width:140px;
+  }
+  .ghost{
+    background:var(--card);
+    color:var(--ink);
+    border:1.5px solid var(--ink);
+    padding:13px 20px;
+    font-size:13.5px;font-weight:700;cursor:pointer;
+    font-family:'Noto Sans KR',sans-serif;
+  }
+  .ghost:hover{background:var(--paper);}
+</style>
+</head>
+<body>
+<div class="stage">
+  <div class="brandbar">
+    <div class="mark">LEADERSHIP COORDINATES</div>
+    <div class="idx" id="brandIdx">진단 도구</div>
+  </div>
+
+  <div class="panel">
+
+    <!-- INTRO -->
+    <div id="screen-intro" class="intro">
+      <h1>나는 어떤 리더인가</h1>
+      <p>15개 문항에 답하면 세 가지 축 — <b>통제 방식(지시↔위임)</b>, <b>초점(과업↔관계)</b>, <b>지향점(안정↔변화)</b> — 위의 내 좌표가 나오고, 그 좌표에 해당하는 리더 유형 8가지 중 하나로 결과가 나옵니다.</p>
+      <p>정답은 없습니다. 지금 행동하는 방식에 가깝게, 직관적으로 답해주세요.</p>
+      <div class="axis-preview">
+        <div class="row"><span>축 1</span><span><b>지시형</b> ── vs ── <b>위임형</b></span></div>
+        <div class="row"><span>축 2</span><span><b>과업중심</b> ── vs ── <b>관계중심</b></span></div>
+        <div class="row"><span>축 3</span><span><b>안정지향</b> ── vs ── <b>변화지향</b></span></div>
+      </div>
+      <button class="cta" onclick="startQuiz()">진단 시작하기 →</button>
+    </div>
+
+    <!-- QUESTION -->
+    <div id="screen-quiz" class="hidden">
+      <div class="qhead">
+        <span class="qtag" id="qAxisTag">축 1 · 통제 방식</span>
+        <span class="qcount" id="qCount">1 / 15</span>
+      </div>
+      <div class="track"><i id="qProgress" style="width:0%"></i></div>
+      <p class="qtext" id="qText">문항이 여기에 표시됩니다.</p>
+      <div class="scale" id="qScale"></div>
+      <div class="nav-row">
+        <button class="linklike" id="backBtn" onclick="goBack()">← 이전 문항</button>
+        <span></span>
+      </div>
+    </div>
+
+    <!-- RESULT -->
+    <div id="screen-result" class="hidden">
+      <div class="result-head">
+        <div class="icon-wrap" id="resultIcon"></div>
+        <div class="result-title">
+          <div class="eyebrow" id="resultEyebrow">TYPE</div>
+          <h2 id="resultName">유형명</h2>
+          <div class="tagline" id="resultTagline">한 줄 설명</div>
+        </div>
+      </div>
+
+      <div class="coords" id="resultCoords"></div>
+
+      <div class="section-block">
+        <h3>특징</h3>
+        <p id="resultDesc"></p>
+      </div>
+      <div class="section-block">
+        <h3>강점</h3>
+        <ul id="resultStrengths"></ul>
+      </div>
+      <div class="section-block">
+        <h3>주의할 점</h3>
+        <ul id="resultCautions"></ul>
+      </div>
+      <div class="section-block">
+        <h3>잘 맞는 팔로워</h3>
+        <p id="resultFit"></p>
+      </div>
+      <div class="section-block">
+        <h3>팔로워와 함께하는 법</h3>
+        <div class="tip-box">
+          <ul id="resultTips"></ul>
+        </div>
+      </div>
+
+      <div class="footer-actions">
+        <button class="ghost" onclick="restart()">다시 진단하기</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+// ---------- QUESTION BANK ----------
+// axis: 'control' (D vs G), 'focus' (T vs P), 'orientation' (S vs C)
+// reverse: true means the statement points to the SECOND pole of the axis
+const AXIS_LABELS = {
+  control: {name:'통제 방식', pos:'지시형', neg:'위임형'},
+  focus: {name:'초점', pos:'과업중심', neg:'관계중심'},
+  orientation: {name:'지향점', pos:'안정지향', neg:'변화지향'}
+};
+
+const QUESTIONS = [
+  {axis:'control', reverse:false, text:'나는 팀원에게 실행 방법까지 구체적으로 안내하는 편이다.'},
+  {axis:'control', reverse:true,  text:'나는 목표만 제시하고 실행 방식은 팀원의 재량에 맡긴다.'},
+  {axis:'control', reverse:false, text:'중요한 의사결정은 대부분 내가 최종 승인한다.'},
+  {axis:'control', reverse:true,  text:'팀원이 스스로 판단하고 결정하도록 권한을 넘기는 편이다.'},
+  {axis:'control', reverse:false, text:'업무 진행 상황을 자주, 세밀하게 확인하는 편이다.'},
+
+  {axis:'focus', reverse:false, text:'나는 성과와 마감 기한을 가장 중요하게 여긴다.'},
+  {axis:'focus', reverse:true,  text:'팀원의 감정 상태나 컨디션을 세심하게 살피는 편이다.'},
+  {axis:'focus', reverse:false, text:'업무 효율과 프로세스 개선에 관심이 많다.'},
+  {axis:'focus', reverse:true,  text:'팀원과의 신뢰 관계를 쌓는 데 많은 시간을 쓴다.'},
+  {axis:'focus', reverse:false, text:'결과만 좋다면 과정의 어려움은 크게 신경 쓰지 않는다.'},
+
+  {axis:'orientation', reverse:false, text:'검증되고 익숙한 방식을 유지하는 것을 선호한다.'},
+  {axis:'orientation', reverse:true,  text:'새로운 시도와 변화를 자주 제안하는 편이다.'},
+  {axis:'orientation', reverse:false, text:'리스크를 최소화하는 방향으로 판단하려 한다.'},
+  {axis:'orientation', reverse:true,  text:'팀에 비전과 방향성을 자주 이야기한다.'},
+  {axis:'orientation', reverse:false, text:'안정적인 루틴과 반복 가능한 프로세스를 중요하게 여긴다.'}
+];
+
+const SCALE_LABELS = ['전혀 아니다','아니다','보통이다','그렇다','매우 그렇다'];
+
+// ---------- TYPE DEFINITIONS ----------
+// key = control(D/G) + focus(T/P) + orientation(S/C)
+const ICONS = {
+  commander: `<svg viewBox="0 0 48 48" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M24 6v10"/><path d="M24 16l14 5-14 5-14-5z"/><path d="M12 22v9c0 5 5 9 12 11 7-2 12-6 12-11v-9"/></svg>`,
+  pioneer: `<svg viewBox="0 0 48 48" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="24" cy="24" r="16"/><path d="M31 17l-5 12-12 5 5-12z"/></svg>`,
+  teacher: `<svg viewBox="0 0 48 48" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 16l18-7 18 7-18 7z"/><path d="M14 20v9c0 3 5 6 10 6s10-3 10-6v-9"/><path d="M42 16v11"/></svg>`,
+  evangelist: `<svg viewBox="0 0 48 48" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 26l24-14v28z"/><path d="M30 19l10-4v18l-10-4"/><path d="M14 28l-3 9"/></svg>`,
+  manager: `<svg viewBox="0 0 48 48" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="24" cy="24" r="7"/><path d="M24 10v4M24 34v4M10 24h4M34 24h4M14 14l3 3M31 31l3 3M34 14l-3 3M17 31l-3 3"/></svg>`,
+  architect: `<svg viewBox="0 0 48 48" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="32" height="24" rx="1"/><path d="M8 24h32M18 8v24M28 32v8M18 32v8"/></svg>`,
+  mentor: `<svg viewBox="0 0 48 48" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M24 40s-14-8.5-14-19a8 8 0 0114-5 8 8 0 0114 5c0 10.5-14 19-14 19z"/></svg>`,
+  companion: `<svg viewBox="0 0 48 48" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="16" cy="16" r="6"/><circle cx="32" cy="16" r="6"/><path d="M8 40c0-7 4-12 8-12s8 5 8 12M24 40c0-7 4-12 8-12s8 5 8 12"/></svg>`
+};
+
+const TYPES = {
+  DTS:{
+    name:'사령관형', icon:'commander', eyebrow:'DIRECTIVE · TASK · STABLE',
+    tagline:'명확한 지시와 검증된 절차로 팀을 이끄는 리더',
+    desc:'목표와 실행 방법을 구체적으로 제시하고, 정해진 절차를 벗어나지 않는 선에서 성과를 관리합니다. 위기 상황이나 신입 팀원이 많은 조직에서 특히 힘을 발휘하는 유형입니다.',
+    strengths:['혼란스러운 상황에서 빠르게 방향을 잡는다','책임 소재와 역할이 명확해 실행 속도가 빠르다','품질과 기준을 일관되게 유지한다'],
+    cautions:['숙련된 팀원에게는 통제가 과하게 느껴질 수 있다','팀원의 자율적 성장 기회가 줄어들 수 있다'],
+    fit:'경험이 적거나 자신감이 낮은 팔로워, 혹은 실수의 비용이 큰 업무를 맡은 팀원과 궁합이 좋습니다.',
+    tips:['업무 숙련도가 오른 팀원에게는 점차 재량권을 넓혀주기','지시의 배경(왜 이 방식인지)을 함께 설명하기','정기 체크인 외 시간에는 관찰자 모드로 물러서기']
+  },
+  DTC:{
+    name:'개척자형', icon:'pioneer', eyebrow:'DIRECTIVE · TASK · CHANGE',
+    tagline:'빠르게 방향을 정하고 강하게 밀어붙이는 변화 주도자',
+    desc:'새로운 목표와 방식을 스스로 결정하고, 팀을 그 방향으로 신속하게 이끕니다. 성과 지향적이면서도 기존 방식에 안주하지 않는 것이 특징입니다.',
+    strengths:['변화가 필요한 시점을 빠르게 포착한다','추진력이 강해 실행까지 걸리는 시간이 짧다','목표에 대한 확신이 뚜렷해 팀에 방향성을 준다'],
+    cautions:['속도에 팀이 따라오지 못하면 소진될 수 있다','팀원의 의견 수렴 없이 밀어붙이는 인상을 줄 수 있다'],
+    fit:'변화에 거부감이 적고 빠른 실행을 선호하는 팔로워, 새로운 도전을 즐기는 팀원과 잘 맞습니다.',
+    tips:['방향 전환 전에 팀의 우려를 짧게라도 듣는 시간 갖기','속도 조절이 필요한 팀원에게는 단계별 마일스톤 제공하기','밀어붙이기 전 "왜 지금인가"를 먼저 설득하기']
+  },
+  DPS:{
+    name:'스승형', icon:'teacher', eyebrow:'DIRECTIVE · PEOPLE · STABLE',
+    tagline:'세심하게 가르치며 안정적으로 성장시키는 리더',
+    desc:'구체적으로 지도하되, 그 과정에서 팀원 개개인의 상태와 성장을 함께 살핍니다. 반복 학습과 피드백을 통해 팀원의 역량을 단단하게 쌓아올리는 스타일입니다.',
+    strengths:['팀원의 역량을 체계적으로 끌어올린다','신뢰를 바탕으로 한 안정적인 팀 분위기를 만든다','피드백이 구체적이라 성장 방향이 명확하다'],
+    cautions:['이미 역량이 충분한 팀원에게는 답답하게 느껴질 수 있다','변화가 필요한 시점에도 기존 방식을 고수할 수 있다'],
+    fit:'역량은 있지만 확신이나 동기가 부족한 팔로워, 성장 피드백을 원하는 팀원과 궁합이 좋습니다.',
+    tips:['역량이 오른 팀원에게는 코칭 빈도를 줄이고 위임을 늘리기','가르치는 것과 함께 팀원의 의견을 묻는 질문을 섞기','성장 속도가 빠른 팀원을 놓치지 않고 다음 과제 제시하기']
+  },
+  DPC:{
+    name:'전도사형', icon:'evangelist', eyebrow:'DIRECTIVE · PEOPLE · CHANGE',
+    tagline:'비전을 열정적으로 전파하며 이끄는 리더',
+    desc:'구체적인 방향을 제시하면서도, 그 방향이 왜 중요한지를 감정적으로 설득력 있게 전달합니다. 팀원 개개인의 동기부여에 신경 쓰며 변화를 이끕니다.',
+    strengths:['팀에 강한 동기와 소속감을 불어넣는다','비전을 구체적 실행 지침과 함께 전달한다','변화의 시기에 팀의 불안을 줄여준다'],
+    cautions:['비전에 공감하지 못하는 팀원은 소외감을 느낄 수 있다','열정이 과하면 현실적인 리스크를 놓칠 수 있다'],
+    fit:'의미와 목적에 動기부여되는 팔로워, 변화의 이유를 이해하고 싶어하는 팀원과 잘 맞습니다.',
+    tips:['비전 전달 후 팀원 각자의 해석을 확인하는 시간 갖기','조용한 팀원에게 먼저 의견을 물어보기','열정만큼 실행 계획의 구체성도 함께 챙기기']
+  },
+  GTS:{
+    name:'관리자형', icon:'manager', eyebrow:'DELEGATING · TASK · STABLE',
+    tagline:'시스템과 프로세스로 안정적으로 관리하는 리더',
+    desc:'실행은 팀원에게 맡기되, 명확한 프로세스와 기준을 통해 성과를 관리합니다. 감정보다는 시스템과 지표를 통해 팀을 운영하는 것을 선호합니다.',
+    strengths:['일관된 기준으로 공정하게 팀을 운영한다','반복 가능한 프로세스로 예측 가능성을 높인다','실무자의 전문성을 존중하고 간섭을 줄인다'],
+    cautions:['관계적 지지가 부족하다고 느껴질 수 있다','예외 상황이나 급변하는 환경에는 대응이 느릴 수 있다'],
+    fit:'스스로 일을 진행할 역량이 있고, 명확한 기준 안에서 자율적으로 움직이길 원하는 팔로워와 잘 맞습니다.',
+    tips:['지표 점검 외에 팀원과의 개인적 대화 시간도 의식적으로 마련하기','예외 상황에서는 프로세스보다 사람을 먼저 살피기','성과 피드백에 감정적 인정의 말을 함께 더하기']
+  },
+  GTC:{
+    name:'설계자형', icon:'architect', eyebrow:'DELEGATING · TASK · CHANGE',
+    tagline:'큰 그림을 설계하고 실행은 전문가에게 맡기는 리더',
+    desc:'전체 구조와 방향을 설계하는 데 집중하고, 세부 실행은 각 분야의 전문성을 믿고 위임합니다. 변화와 혁신을 추구하되 직접 실행에 개입하지는 않습니다.',
+    strengths:['전략적 그림을 그리는 능력이 뛰어나다','전문성을 존중해 팀원의 주도성을 살린다','새로운 구조나 시스템을 설계하는 데 강하다'],
+    cautions:['실행 단계에서의 어려움을 놓칠 수 있다','방향 설계와 현실 실행 사이에 괴리가 생길 수 있다'],
+    fit:'전문성이 높고 자기주도적인 팔로워, 큰 그림 안에서 스스로 방법을 찾고 싶어하는 팀원과 잘 맞습니다.',
+    tips:['설계도만 던지지 말고 실행 초기엔 함께 점검하기','전문가 팀원에게도 정기적으로 방향 재확인 기회 주기','실행 중 발생하는 현실적 장애물을 직접 들어보기']
+  },
+  GPS:{
+    name:'멘토형', icon:'mentor', eyebrow:'DELEGATING · PEOPLE · STABLE',
+    tagline:'신뢰를 바탕으로 곁에서 지지해주는 리더',
+    desc:'결정과 실행의 주도권을 팀원에게 넘기고, 리더는 정서적 지지와 안정적인 신뢰 관계를 제공하는 데 집중합니다. 팀원이 흔들릴 때 곁을 지켜주는 유형입니다.',
+    strengths:['팀원의 심리적 안정감을 높인다','자율성을 존중해 자기주도성을 키운다','장기적으로 깊은 신뢰 관계를 형성한다'],
+    cautions:['방향성이 필요한 순간에도 개입을 미룰 수 있다','성과 관리가 느슨해질 위험이 있다'],
+    fit:'역량은 충분하지만 자신감이나 확신이 흔들리는 팔로워와 특히 잘 맞습니다.',
+    tips:['지지와 함께 명확한 기준선은 분명히 제시하기','정기적으로 방향이 맞는지 짧게 점검하기','침묵하는 문제를 방치하지 말고 먼저 물어보기']
+  },
+  GPC:{
+    name:'동반자형', icon:'companion', eyebrow:'DELEGATING · PEOPLE · CHANGE',
+    tagline:'동료처럼 함께 걸으며 변화를 촉진하는 리더',
+    desc:'위계보다는 동등한 관계를 지향하며, 팀원과 함께 변화의 방향을 찾아갑니다. 서번트 리더십에 가까운 유형으로, 팀의 자발적 동기를 이끌어내는 데 강점이 있습니다.',
+    strengths:['팀원의 자발적 참여와 오너십을 이끌어낸다','수평적 분위기 속에서 다양한 의견이 나오게 한다','변화에 대한 저항을 관계로 낮춘다'],
+    cautions:['명확한 지시가 필요한 순간에 방향이 흐려질 수 있다','책임 소재가 모호해질 위험이 있다'],
+    fit:'주도적이고 협업을 선호하는 팔로워, 수평적 관계에서 더 큰 동기를 얻는 팀원과 잘 맞습니다.',
+    tips:['중요한 순간에는 최종 결정권자 역할을 분명히 하기','모두의 의견을 듣되 결론은 명확히 정리해주기','책임 범위를 미리 합의해두기']
+  }
+};
+
+// ---------- STATE ----------
+let answers = new Array(QUESTIONS.length).fill(null);
+let current = 0;
+
+function startQuiz(){
+  document.getElementById('screen-intro').classList.add('hidden');
+  document.getElementById('screen-quiz').classList.remove('hidden');
+  document.getElementById('brandIdx').textContent = '문항 응답 중';
+  renderQuestion();
+}
+
+function renderQuestion(){
+  const q = QUESTIONS[current];
+  document.getElementById('qAxisTag').textContent =
+    (current<5?'축 1 · ':current<10?'축 2 · ':'축 3 · ') + AXIS_LABELS[q.axis].name;
+  document.getElementById('qCount').textContent = (current+1)+' / '+QUESTIONS.length;
+  document.getElementById('qProgress').style.width = ((current)/QUESTIONS.length*100)+'%';
+  document.getElementById('qText').textContent = q.text;
+  document.getElementById('backBtn').style.visibility = current===0 ? 'hidden' : 'visible';
+
+  const scale = document.getElementById('qScale');
+  scale.innerHTML = '';
+  SCALE_LABELS.forEach((label, i)=>{
+    const val = i+1;
+    const btn = document.createElement('button');
+    const selected = answers[current] === val;
+    btn.innerHTML = '<span class="dot" style="'+(selected?'background:var(--ink)':'')+'"></span>'+label;
+    if(selected){ btn.style.background='var(--ink)'; btn.style.color='#fff'; }
+    btn.onclick = ()=>selectAnswer(val);
+    scale.appendChild(btn);
+  });
+}
+
+function selectAnswer(val){
+  answers[current] = val;
+  if(current < QUESTIONS.length-1){
+    current++;
+    renderQuestion();
+  } else {
+    showResult();
+  }
+}
+
+function goBack(){
+  if(current>0){ current--; renderQuestion(); }
+}
+
+function computeScores(){
+  const totals = {control:0, focus:0, orientation:0};
+  QUESTIONS.forEach((q, i)=>{
+    const raw = answers[i];
+    const scored = q.reverse ? (6-raw) : raw;
+    totals[q.axis]+=scored;
+  });
+  return totals;
+}
+
+function showResult(){
+  const totals = computeScores();
+  const key =
+    (totals.control>=15?'D':'G') +
+    (totals.focus>=15?'T':'P') +
+    (totals.orientation>=15?'S':'C');
+
+  const type = TYPES[key];
+
+  document.getElementById('screen-quiz').classList.add('hidden');
+  document.getElementById('screen-result').classList.remove('hidden');
+  document.getElementById('brandIdx').textContent = '진단 결과';
+
+  document.getElementById('resultIcon').innerHTML = ICONS[type.icon];
+  document.getElementById('resultEyebrow').textContent = type.eyebrow;
+  document.getElementById('resultName').textContent = type.name;
+  document.getElementById('resultTagline').textContent = type.tagline;
+  document.getElementById('resultDesc').textContent = type.desc;
+
+  const coordsEl = document.getElementById('resultCoords');
+  coordsEl.innerHTML = '';
+  const axisOrder = ['control','focus','orientation'];
+  axisOrder.forEach(axisKey=>{
+    const info = AXIS_LABELS[axisKey];
+    const score = totals[axisKey]; // 5-25
+    const pct = ((score-5)/20*100);
+    const dominant = score>=15;
+    const row = document.createElement('div');
+    row.className='coord-row';
+    row.innerHTML = `
+      <div class="labels">
+        <span style="${dominant?'font-weight:700;color:var(--ink)':''}">${info.pos}</span>
+        <b>${info.name}</b>
+        <span style="${!dominant?'font-weight:700;color:var(--ink)':''}">${info.neg}</span>
+      </div>
+      <div class="bar"><i style="left:${pct}%"></i></div>
+    `;
+    coordsEl.appendChild(row);
+  });
+
+  fillList('resultStrengths', type.strengths);
+  fillList('resultCautions', type.cautions);
+  document.getElementById('resultFit').textContent = type.fit;
+  fillList('resultTips', type.tips);
+
+  window.scrollTo({top:0, behavior:'smooth'});
+}
+
+function fillList(id, items){
+  const el = document.getElementById(id);
+  el.innerHTML = '';
+  items.forEach(txt=>{
+    const li = document.createElement('li');
+    li.textContent = txt;
+    el.appendChild(li);
+  });
+}
+
+function restart(){
+  answers = new Array(QUESTIONS.length).fill(null);
+  current = 0;
+  document.getElementById('screen-result').classList.add('hidden');
+  document.getElementById('screen-intro').classList.remove('hidden');
+  document.getElementById('brandIdx').textContent = '진단 도구';
+  window.scrollTo({top:0, behavior:'smooth'});
+}
+</script>
+</body>
+</html>
