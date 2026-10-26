@@ -1,0 +1,687 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>공정개선 라인밸런싱 실습용 시뮬레이터 (실습생 배포용)</title>
+    <style>
+        :root {
+            --primary-color: #1a365d;
+            --secondary-color: #2b6cb0;
+            --accent-color: #3182ce;
+            --bg-color: #f4f6f8;
+            --card-bg: #ffffff;
+            --border-color: #cbd5e0;
+            --text-color: #2d3748;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, 'Malgun Gothic', sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        header {
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            color: white;
+            padding: 10px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.15);
+            flex-shrink: 0;
+        }
+
+        header h1 { font-size: 18px; font-weight: 700; }
+
+        .workspace { display: flex; flex: 1; overflow: hidden; }
+
+        /* Left Control Panel (공정별 C/T 및 자원 조건 입력부) */
+        .sidebar {
+            width: 380px;
+            background: var(--card-bg);
+            border-right: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+            padding: 15px;
+            gap: 12px;
+            flex-shrink: 0;
+        }
+
+        .section-title {
+            font-size: 14px;
+            font-weight: 700;
+            color: var(--primary-color);
+            border-bottom: 2px solid var(--border-color);
+            padding-bottom: 6px;
+            margin-bottom: 10px;
+        }
+
+        .station-row {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin-bottom: 8px;
+            background: #f8fafc;
+            padding: 8px;
+            border-radius: 6px;
+            border: 1px solid #e2e8f0;
+        }
+
+        .station-row input[type="text"] {
+            width: 85px; padding: 4px 6px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 12px; font-weight: 600;
+        }
+
+        .station-row input[type="range"] { flex: 1; }
+        .val-label { width: 42px; font-size: 11px; text-align: right; font-family: monospace; color: #4a5568; font-weight: bold; }
+
+        .btn {
+            background-color: var(--accent-color); color: white; border: none; padding: 12px 14px; border-radius: 6px; font-weight: 700; cursor: pointer; transition: background 0.2s; display: flex; justify-content: center; align-items: center; gap: 6px; font-size: 14px; margin-top: 10px;
+        }
+        .btn:hover { background-color: #2b6cb0; }
+
+        .slider-control { display: flex; flex-direction: column; gap: 2px; font-size: 11px; margin-top: 8px; background: #edf2f7; padding: 8px; border-radius: 6px; }
+        .slider-control-header { display: flex; justify-content: space-between; color: #4a5568; font-weight: 600; }
+
+        /* Right Main Workspace (순수 U자형 라인 애니메이션 전용 화면) */
+        .main-content { flex: 1; display: flex; flex-direction: column; overflow: hidden; background: white; position: relative; }
+
+        .anim-toolbar { padding: 8px 15px; background: #f7fafc; border-bottom: 1px solid var(--border-color); display: flex; align-items: center; gap: 12px; font-size: 12px; flex-shrink: 0; }
+        .anim-canvas-container { flex: 1; position: relative; background: #f5f6f7; overflow: hidden; }
+        canvas#animCanvas { width: 100%; height: 100%; display: block; }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>🏭 공정개선 라인밸런싱 실습용 시뮬레이터 (실습생용)</h1>
+        <div style="font-size: 12px; opacity: 0.85;">Realistic U-Line Active Flow Simulation Engine</div>
+    </header>
+
+    <div class="workspace">
+        <!-- Left Sidebar: 공정별 C/T 및 자원 조건 설정 -->
+        <div class="sidebar">
+            <div class="section-title">공정별 C/T 및 자원 조건</div>
+            <div id="stationsContainer"></div>
+
+            <div class="slider-control">
+                <div class="slider-control-header"><span>목표 택트타임 (Takt Time)</span><span id="taktVal">45초</span></div>
+                <input type="range" id="taktTime" min="10" max="90" value="45" oninput="document.getElementById('taktVal').innerText = this.value + '초';">
+            </div>
+
+            <button class="btn" onclick="executeSimulation()">▶ 시뮬레이션 적용 / 재시작</button>
+        </div>
+
+        <!-- Right Main Workspace: 순수 U자형 애니메이션 캔버스만 깔끔하게 구성 -->
+        <div class="main-content">
+            <div class="anim-toolbar">
+                <button class="btn" id="playBtn" style="margin-top:0; padding:6px 12px;" onclick="togglePlay()">⏸ 일시정지</button>
+                <button class="btn btn-secondary" style="margin-top:0; padding:6px 12px; background:#718096; color:white; border:none; border-radius:4px; font-weight:bold; cursor:pointer;" onclick="seekStart()">⏮ 처음부터</button>
+                <button class="btn btn-secondary" style="margin-top:0; padding:6px 12px; background:#718096; color:white; border:none; border-radius:4px; font-weight:bold; cursor:pointer;" onclick="seekEnd()">⏭ 끝으로</button>
+                <label style="margin-left:10px;">재생속도: <input type="range" id="speedScale" min="10" max="500" value="150" style="width: 90px;"> <span id="speedVal">150</span>배</label>
+                <span id="animTimer" style="font-family: monospace; font-weight: bold; margin-left: 15px; font-size:13px;">00:00:00 / 08:00:00</span>
+                <span id="shippedCounter" style="margin-left: auto; font-weight: bold; color: var(--secondary-color); font-size:13px;">🚚 누적 출하량: 0개</span>
+            </div>
+
+            <div class="anim-canvas-container">
+                <canvas id="animCanvas"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const DEFAULT_STATIONS = [
+            { name: "Station 1a", cycleTime: 45, workers: 1 },
+            { name: "Test 1",     cycleTime: 20, workers: 1 },
+            { name: "Station 1b", cycleTime: 50, workers: 1 },
+            { name: "Station 2a", cycleTime: 35, workers: 1 },
+            { name: "Test 2",     cycleTime: 15, workers: 1 },
+            { name: "Station 2b", cycleTime: 60, workers: 1 },
+            { name: "Station 3",  cycleTime: 40, workers: 1 }
+        ];
+
+        const STATION_PALETTE = ["#4a90d9", "#5cb85c", "#f0ad4e", "#9b59b6", "#e67e22", "#1abc9c", "#e74c3c", "#3498db"];
+        const CONVEYOR_TRAVEL_TIME = 10.0; // 공정 간 레일 이동 소요시간
+
+        let currentMetrics = null;
+        let replayData = null;
+        let isPlaying = false;
+        let playhead = 0.0;
+        let animFrame = 0;
+        let animAnimationId = null;
+
+        class SeededRandom {
+            constructor(seed = 42) { this.seed = seed; }
+            next() { let x = Math.sin(this.seed++) * 10000; return x - Math.floor(x); }
+            triangular(low, high, mode) {
+                let u = this.next();
+                let c = (mode - low) / (high - low);
+                if (u <= c) return low + Math.sqrt(u * (high - low) * (mode - low));
+                return high - Math.sqrt((1 - u) * (high - low) * (high - mode));
+            }
+        }
+
+        let rng = new SeededRandom(42);
+
+        function initStationControls() {
+            const container = document.getElementById('stationsContainer');
+            container.innerHTML = '';
+            DEFAULT_STATIONS.forEach((cfg, idx) => {
+                const row = document.createElement('div');
+                row.className = 'station-row';
+                row.innerHTML = `
+                    <input type="text" id="stName_${idx}" value="${cfg.name}">
+                    <input type="range" id="stCt_${idx}" min="5" max="120" value="${cfg.cycleTime}" oninput="document.getElementById('stCtVal_${idx}').innerText = this.value + 's';">
+                    <span class="val-label" id="stCtVal_${idx}">${cfg.cycleTime}s</span>
+                    <input type="range" id="stW_${idx}" min="1" max="5" value="${cfg.workers}" style="width: 45px;" oninput="document.getElementById('stWVal_${idx}').innerText = 'x' + this.value;">
+                    <span class="val-label" id="stWVal_${idx}" style="width: 22px;">x${cfg.workers}</span>
+                `;
+                container.appendChild(row);
+            });
+        }
+
+        function gatherStationConfigs() {
+            return DEFAULT_STATIONS.map((cfg, idx) => ({
+                name: document.getElementById(`stName_${idx}`).value,
+                cycleTime: parseFloat(document.getElementById(`stCt_${idx}`).value),
+                workers: parseInt(document.getElementById(`stW_${idx}`).value)
+            }));
+        }
+
+        function runDiscreteSimulation(stationConfigs, taktTime, shiftMinutes) {
+            rng = new SeededRandom(42);
+            const shiftSeconds = shiftMinutes * 60;
+            const numStations = stationConfigs.length;
+
+            let stations = stationConfigs.map((cfg, idx) => ({
+                id: idx,
+                name: cfg.name,
+                cycleTime: cfg.cycleTime,
+                workers: cfg.workers,
+                effCycle: cfg.cycleTime / cfg.workers,
+                busyTime: 0.0,
+                completed: 0,
+                nextAvailableTime: new Array(cfg.workers).fill(0.0)
+            }));
+
+            let completedParts = [];
+            let releaseGap = taktTime;
+            let currTime = 0.0;
+            let partId = 0;
+
+            while (currTime < shiftSeconds) {
+                partId++;
+                let pStart = currTime;
+                let currentTime = pStart;
+                let stationLog = [];
+
+                for (let idx = 0; idx < numStations; idx++) {
+                    let st = stations[idx];
+                    let arriveT = currentTime;
+
+                    let workerIdx = 0;
+                    let earliestT = Infinity;
+                    for (let w = 0; w < st.workers; w++) {
+                        if (st.nextAvailableTime[w] < earliestT) {
+                            earliestT = st.nextAvailableTime[w];
+                            workerIdx = w;
+                        }
+                    }
+
+                    let procStart = Math.max(arriveT, earliestT);
+                    let pt = st.cycleTime;
+                    let procEnd = procStart + pt;
+
+                    st.nextAvailableTime[workerIdx] = procEnd;
+                    st.busyTime += pt;
+                    st.completed++;
+                    currentTime = procEnd + CONVEYOR_TRAVEL_TIME;
+
+                    stationLog.push([idx, arriveT, procStart, procEnd]);
+                }
+
+                if (currentTime <= shiftSeconds) {
+                    completedParts.push({
+                        id: partId, start: pStart, finish: currentTime, stationLog
+                    });
+                }
+
+                currTime += releaseGap;
+            }
+
+            return {
+                stations, completedParts, shiftSeconds, taktTime
+            };
+        }
+
+        function executeSimulation() {
+            const configs = gatherStationConfigs();
+            const takt = parseFloat(document.getElementById('taktTime').value);
+            const shiftMinutes = 480;
+
+            const lineData = runDiscreteSimulation(configs, takt, shiftMinutes);
+            replayData = lineData;
+
+            const effCycles = configs.map(c => c.cycleTime / c.workers);
+            const maxEffCycle = Math.max(...effCycles);
+            const maxIdx = effCycles.indexOf(maxEffCycle);
+
+            currentMetrics = {
+                bottleneck: { name: configs[maxIdx].name },
+                effCycles
+            };
+
+            startAnimationReplay();
+        }
+
+        // =====================================================================
+        // U-LINE ANIMATION ENGINE (Full Rail Motion & Dynamic Workers)
+        // =====================================================================
+        function startAnimationReplay() {
+            playhead = 0.0;
+            isPlaying = true;
+            document.getElementById('playBtn').innerText = '⏸ 일시정지';
+            if (animAnimationId) cancelAnimationFrame(animAnimationId);
+            animateCanvas();
+        }
+
+        function togglePlay() {
+            isPlaying = !isPlaying;
+            document.getElementById('playBtn').innerText = isPlaying ? '⏸ 일시정지' : '▶ 재생';
+            if (isPlaying) animateCanvas();
+        }
+
+        function seekStart() { playhead = 0.0; drawAnimationFrame(); }
+        function seekEnd() { playhead = replayData ? replayData.shiftSeconds : 0; isPlaying = false; drawAnimationFrame(); }
+
+        function animateCanvas() {
+            if (!isPlaying || !replayData) return;
+            const speed = parseFloat(document.getElementById('speedScale').value);
+            playhead += (0.05 * speed);
+            if (playhead >= replayData.shiftSeconds) {
+                playhead = replayData.shiftSeconds;
+                isPlaying = false;
+                document.getElementById('playBtn').innerText = '▶ 재생';
+            }
+            animFrame++;
+            drawAnimationFrame();
+            animAnimationId = requestAnimationFrame(animateCanvas);
+        }
+
+        function getUShapePoint(s, totalLen, bounds) {
+            const { leftX, rightX, topY, bottomY, radius } = bounds;
+            const leftVert = (bottomY - radius) - topY;
+            const arcLen = (Math.PI / 2) * radius;
+            const bottomLen = (rightX - radius) - (leftX + radius);
+
+            if (s <= leftVert) {
+                return { x: leftX, y: topY + s, angle: Math.PI / 2 };
+            }
+            s -= leftVert;
+            if (s <= arcLen) {
+                let phi = Math.PI - (Math.PI / 2) * (s / arcLen);
+                return { x: leftX + radius + radius * Math.cos(phi), y: bottomY - radius + radius * Math.sin(phi), angle: phi - Math.PI / 2 };
+            }
+            s -= arcLen;
+            if (s <= bottomLen) {
+                return { x: leftX + radius + s, y: bottomY, angle: 0 };
+            }
+            s -= bottomLen;
+            if (s <= arcLen) {
+                let phi = Math.PI / 2 - (Math.PI / 2) * (s / arcLen);
+                return { x: rightX - radius + radius * Math.cos(phi), y: bottomY - radius + radius * Math.sin(phi), angle: phi - Math.PI / 2 };
+            }
+            s -= arcLen;
+            return { x: rightX, y: (bottomY - radius) - s, angle: -Math.PI / 2 };
+        }
+
+        function drawAnimationFrame() {
+            const canvas = document.getElementById('animCanvas');
+            const container = canvas.parentElement;
+            canvas.width = container.clientWidth;
+            canvas.height = container.clientHeight;
+            const ctx = canvas.getContext('2d');
+            const w = canvas.width, h = canvas.height;
+
+            ctx.clearRect(0, 0, w, h);
+            if (!replayData) return;
+
+            const n = DEFAULT_STATIONS.length;
+            const t = playhead;
+
+            const bounds = {
+                leftX: w * 0.18,
+                rightX: w * 0.82,
+                topY: h * 0.18,
+                bottomY: h * 0.82,
+                radius: Math.min(w * 0.22, h * 0.26)
+            };
+
+            const leftVert = (bounds.bottomY - bounds.radius) - bounds.topY;
+            const arcLen = (Math.PI / 2) * bounds.radius;
+            const bottomLen = (bounds.rightX - bounds.radius) - (bounds.leftX + bounds.radius);
+            const totalLen = leftVert * 2 + arcLen * 2 + bottomLen;
+
+            // Draw Conveyor Track
+            ctx.beginPath();
+            ctx.strokeStyle = '#cbd5e0';
+            ctx.lineWidth = 32;
+            ctx.lineCap = 'round';
+            for (let s = 0; s <= totalLen; s += 5) {
+                let p = getUShapePoint(s, totalLen, bounds);
+                if (s === 0) ctx.moveTo(p.x, p.y);
+                else ctx.lineTo(p.x, p.y);
+            }
+            ctx.stroke();
+
+            // Inner Rail Line
+            ctx.beginPath();
+            ctx.strokeStyle = '#a0aec0';
+            ctx.lineWidth = 3;
+            for (let s = 0; s <= totalLen; s += 5) {
+                let p = getUShapePoint(s, totalLen, bounds);
+                if (s === 0) ctx.moveTo(p.x, p.y);
+                else ctx.lineTo(p.x, p.y);
+            }
+            ctx.stroke();
+
+            // Truck Vehicles
+            const inputPos = { x: bounds.leftX - 100, y: bounds.topY };
+            const supplyCycle = t % 60;
+            let supplyX = inputPos.x;
+            if (supplyCycle > 40) supplyX -= (supplyCycle - 40) * 1.8;
+            drawVehicle(ctx, supplyX, inputPos.y, '#3182ce', '🚛 원자재 하역');
+
+            const outputPos = { x: bounds.rightX + 100, y: bounds.topY };
+            const shipCycle = t % 75;
+            let shipX = outputPos.x;
+            if (shipCycle > 50) shipX += (shipCycle - 50) * 1.8;
+            drawVehicle(ctx, shipX, outputPos.y, '#e67e22', '🚚 OEM 출하');
+
+            const stationS = Array.from({ length: n }, (_, i) => (i / (n - 1)) * totalLen);
+
+            let queueCounts = new Array(n).fill(0);
+            let activeProcessing = new Array(n).fill(null);
+            let movingPartsOnLine = [];
+            let shippedCount = 0;
+
+            replayData.completedParts.forEach(p => {
+                if (t >= p.finish) {
+                    shippedCount++;
+                    if (t < p.finish + 12) {
+                        const shipProg = (t - p.finish) / 12;
+                        const srcP = getUShapePoint(totalLen, totalLen, bounds);
+                        const dstP = { x: bounds.rightX + 80, y: bounds.topY };
+                        movingPartsOnLine.push({
+                            x: srcP.x + (dstP.x - srcP.x) * shipProg,
+                            y: srcP.y + (dstP.y - srcP.y) * shipProg,
+                            color: '#e67e22'
+                        });
+                    }
+                } else if (t >= p.start) {
+                    const st1Start = p.stationLog[0][1];
+                    if (t < st1Start) {
+                        const inProg = Math.max(0, Math.min(1, (t - p.start) / Math.max(0.1, st1Start - p.start)));
+                        const srcP = { x: bounds.leftX - 80, y: bounds.topY };
+                        const dstP = getUShapePoint(0, totalLen, bounds);
+                        movingPartsOnLine.push({
+                            x: srcP.x + (dstP.x - srcP.x) * inProg,
+                            y: srcP.y + (dstP.y - srcP.y) * inProg,
+                            color: '#3182ce'
+                        });
+                    }
+
+                    p.stationLog.forEach(([stIdx, arriveT, procStart, procEnd], lIdx) => {
+                        if (t >= arriveT && t < procEnd) {
+                            if (t < procStart) {
+                                queueCounts[stIdx]++;
+                            } else {
+                                const progress = (t - procStart) / Math.max(0.01, (procEnd - procStart));
+                                activeProcessing[stIdx] = { progress, procStart, procEnd };
+                            }
+                        }
+
+                        // 레일 구간을 지나는 3D 상자 애니메이션
+                        if (lIdx < p.stationLog.length - 1) {
+                            const nextArriveT = p.stationLog[lIdx + 1][1];
+                            if (t >= procEnd && t < nextArriveT) {
+                                const flowProgress = (t - procEnd) / Math.max(0.01, (nextArriveT - procEnd));
+                                const srcS = stationS[stIdx];
+                                const dstS = stationS[stIdx + 1];
+                                const currentS = srcS + (dstS - srcS) * flowProgress;
+                                const pt = getUShapePoint(currentS, totalLen, bounds);
+                                movingPartsOnLine.push({
+                                    x: pt.x, y: pt.y,
+                                    color: STATION_PALETTE[stIdx % STATION_PALETTE.length]
+                                });
+                            }
+                        }
+                    });
+                }
+            });
+
+            // 1. 레일 위를 지나가는 3D 상자
+            movingPartsOnLine.forEach(mp => {
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
+                ctx.fillRect(mp.x - 10, mp.y + 8, 24, 24);
+                draw3DBox(ctx, mp.x, mp.y, mp.color, 24);
+            });
+
+            // 2. 공정 기계, 대기열, 작업자 렌더링
+            const configs = gatherStationConfigs();
+            stationS.forEach((sVal, idx) => {
+                const p = getUShapePoint(sVal, totalLen, bounds);
+                const cfg = configs[idx];
+                const isBottleneck = currentMetrics && (cfg.name === currentMetrics.bottleneck.name);
+                const qCount = queueCounts[idx];
+                const procState = activeProcessing[idx];
+
+                ctx.save();
+                ctx.translate(p.x, p.y);
+                ctx.fillStyle = procState ? '#e6fffa' : (isBottleneck ? '#fff5f5' : '#ffffff');
+                ctx.strokeStyle = procState ? '#319795' : (isBottleneck ? '#e53e3e' : '#718096');
+                ctx.lineWidth = procState || isBottleneck ? 3.5 : 2.5;
+                ctx.fillRect(-60, -36, 120, 72);
+                ctx.strokeRect(-60, -36, 120, 72);
+
+                ctx.fillStyle = '#1a202c';
+                ctx.font = 'bold 13px sans-serif';
+                ctx.textAlign = 'center';
+                ctx.fillText(cfg.name, 0, -12);
+                ctx.font = '11px sans-serif';
+                ctx.fillStyle = '#4a5568';
+                ctx.fillText(`C/T: ${cfg.cycleTime}s (인원 x${cfg.workers})`, 0, 8);
+
+                if (procState) {
+                    const itemInPos = -30 + 60 * procState.progress;
+                    draw3DBox(ctx, itemInPos, 22, STATION_PALETTE[idx % STATION_PALETTE.length], 14);
+
+                    ctx.fillStyle = '#319795';
+                    ctx.font = 'bold 11px sans-serif';
+                    ctx.fillText('⚙ 가공 진행중', 0, -24);
+                } else if (qCount === 0) {
+                    ctx.fillStyle = '#a0aec0';
+                    ctx.font = '11px sans-serif';
+                    ctx.fillText('⏹ 자재 대기중', 0, 24);
+                }
+
+                if (isBottleneck) {
+                    ctx.fillStyle = '#e53e3e';
+                    ctx.font = 'bold 12px sans-serif';
+                    ctx.fillText('⚠ 최대 병목', 0, -46);
+                }
+                ctx.restore();
+
+                // 대기열 WIP
+                if (qCount > 0) {
+                    for (let q = 0; q < qCount; q++) {
+                        let col = q % 3;
+                        let row = Math.floor(q / 3);
+                        const qx = p.x - 80 - col * 18;
+                        const qy = p.y + 20 - row * 18;
+                        draw3DBox(ctx, qx, qy, STATION_PALETTE[idx % STATION_PALETTE.length], 16);
+                    }
+                    ctx.fillStyle = '#e53e3e';
+                    ctx.font = 'bold 12px sans-serif';
+                    ctx.fillText(`대기: ${qCount}개`, p.x - 90, p.y - 28);
+                }
+
+                // 작업자
+                for (let wIdx = 0; wIdx < cfg.workers; wIdx++) {
+                    const isWorking = !!procState;
+                    const isOverloaded = (qCount >= 4);
+                    const workPhase = (animFrame + idx * 3 + wIdx * 5) % 40;
+
+                    let walkOffsetX = 0;
+                    let walkOffsetY = 0;
+
+                    if (isWorking) {
+                        if (workPhase < 10) {
+                            walkOffsetX = -32 * (workPhase / 10);
+                            walkOffsetY = 16 * (workPhase / 10);
+                        } else if (workPhase < 20) {
+                            walkOffsetX = -32 * (1 - (workPhase - 10) / 10);
+                            walkOffsetY = 16 * (1 - (workPhase - 10) / 10);
+                        }
+                    }
+
+                    const offset = (wIdx - (cfg.workers - 1) / 2) * 38;
+                    const wx = p.x + Math.sin(p.angle) * 64 + offset * Math.cos(p.angle) + walkOffsetX;
+                    const wy = p.y - Math.cos(p.angle) * 64 + offset * Math.sin(p.angle) + walkOffsetY;
+
+                    drawHumanWorker(ctx, wx, wy, isWorking, isOverloaded, STATION_PALETTE[idx % STATION_PALETTE.length]);
+                }
+            });
+
+            document.getElementById('shippedCounter').innerText = `🚚 누적 출하량: ${shippedCount}개`;
+            const hVal = String(Math.floor(t / 3600)).padStart(2, '0');
+            const mVal = String(Math.floor((t % 3600) / 60)).padStart(2, '0');
+            const sVal = String(Math.floor(t % 60)).padStart(2, '0');
+            document.getElementById('animTimer').innerText = `${hVal}:${mVal}:${sVal} / 08:00:00`;
+        }
+
+        function drawHumanWorker(ctx, x, y, isWorking, isOverloaded, shirtColor) {
+            ctx.save();
+            ctx.translate(x, y);
+
+            const legSwing = isWorking ? Math.sin(animFrame * 0.4) * 9 : 0;
+            ctx.strokeStyle = '#1a202c';
+            ctx.lineWidth = 5;
+            ctx.beginPath();
+            ctx.moveTo(0, -10);
+            ctx.lineTo(-6 + legSwing, 18);
+            ctx.moveTo(0, -10);
+            ctx.lineTo(6 - legSwing, 18);
+            ctx.stroke();
+
+            ctx.strokeStyle = shirtColor;
+            ctx.lineWidth = 14;
+            ctx.beginPath();
+            ctx.moveTo(0, -32);
+            ctx.lineTo(0, -10);
+            ctx.stroke();
+
+            ctx.strokeStyle = '#f3c98b';
+            ctx.lineWidth = 5;
+            const armMotion = isWorking ? Math.cos(animFrame * 0.5) * 12 : 0;
+
+            ctx.beginPath();
+            ctx.moveTo(0, -28);
+            ctx.lineTo(-12, -16 + armMotion);
+            ctx.moveTo(0, -28);
+            ctx.lineTo(12, -16 - armMotion);
+            ctx.stroke();
+
+            ctx.fillStyle = '#f3c98b';
+            ctx.beginPath();
+            ctx.arc(0, -40, 9, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.fillStyle = '#f1c40f';
+            ctx.beginPath();
+            ctx.arc(0, -41, 11, Math.PI, 0);
+            ctx.fill();
+
+            ctx.fillStyle = '#1a202c';
+            ctx.fillRect(-4, -41, 2, 2);
+            ctx.fillRect(2, -41, 2, 2);
+
+            ctx.strokeStyle = '#1a202c';
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            if (isOverloaded) {
+                ctx.arc(0, -35, 3, Math.PI, 0);
+            } else if (isWorking) {
+                ctx.arc(0, -38, 3, 0, Math.PI);
+            } else {
+                ctx.moveTo(-3, -36); ctx.lineTo(3, -36);
+            }
+            ctx.stroke();
+
+            if (isOverloaded) {
+                ctx.fillStyle = '#3182ce';
+                ctx.beginPath();
+                ctx.arc(12, -42 + (animFrame % 6), 3, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            ctx.restore();
+        }
+
+        function draw3DBox(ctx, cx, cy, color, size) {
+            ctx.save();
+            ctx.translate(cx, cy);
+            ctx.fillStyle = color;
+            ctx.fillRect(-size/2, -size/2, size, size);
+            ctx.strokeStyle = '#1a202c';
+            ctx.lineWidth = 1.5;
+            ctx.strokeRect(-size/2, -size/2, size, size);
+
+            ctx.fillStyle = '#ffffff';
+            ctx.beginPath();
+            ctx.moveTo(-size/2, -size/2);
+            ctx.lineTo(-size/4, -size/2 - size/3);
+            ctx.lineTo(size/4, -size/2 - size/3);
+            ctx.lineTo(size/2, -size/2);
+            ctx.closePath();
+            ctx.fill();
+            ctx.stroke();
+            ctx.restore();
+        }
+
+        function drawVehicle(ctx, x, y, color, label) {
+            ctx.save();
+            ctx.translate(x, y);
+            ctx.fillStyle = color;
+            ctx.fillRect(-28, -15, 42, 26);
+            ctx.fillRect(14, -6, 16, 17);
+            ctx.fillStyle = '#1a202c';
+            ctx.beginPath();
+            ctx.arc(-14, 13, 5.5, 0, Math.PI * 2);
+            ctx.arc(18, 13, 5.5, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = '#2d3748';
+            ctx.font = 'bold 11px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText(label, 0, -22);
+            ctx.restore();
+        }
+
+        window.onload = function() {
+            initStationControls();
+            executeSimulation();
+        };
+    </script>
+</body>
+</html>
